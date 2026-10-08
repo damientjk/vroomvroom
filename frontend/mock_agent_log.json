@@ -1,0 +1,65 @@
+[
+  {
+    "seq": 1,
+    "agent": "system",
+    "type": "evidence",
+    "content": "Dispute DISP-002 filed by rider (no_show_charge). Gathering evidence...",
+    "timestamp": "2026-10-08T14:00:00+08:00"
+  },
+  {
+    "seq": 2,
+    "agent": "system",
+    "type": "evidence",
+    "content": "no_show_check: driver_distance_from_pickup_m=0, arrived_minutes_vs_scheduled=-2, total_wait_min=8, contact_attempts=5, rider_replies=0",
+    "timestamp": "2026-10-08T14:00:01+08:00"
+  },
+  {
+    "seq": 3,
+    "agent": "system",
+    "type": "evidence",
+    "content": "history_lookup: rider avg_rating=3.9, disputes=4 (1 upheld, 3 rejected), fraud_flags=1; driver avg_rating=4.9, disputes=1, fraud_flags=0",
+    "timestamp": "2026-10-08T14:00:02+08:00"
+  },
+  {
+    "seq": 4,
+    "agent": "rider_advocate",
+    "type": "argument",
+    "content": "The rider was at the pickup point on time but could not locate the vehicle. The cancellation fee of $5.00 is unfair and should be reversed. Evidence: total_wait_min=8 does not prove rider absence; GPS shows driver at a different lobby entrance.",
+    "timestamp": "2026-10-08T14:00:05+08:00"
+  },
+  {
+    "seq": 5,
+    "agent": "rider_advocate",
+    "type": "argument",
+    "content": "Citing NS-2.1: the 5-minute free wait applies, but the rider was present — this is a locating failure, not a no-show. The charge should be reversed under NS-3.2.",
+    "timestamp": "2026-10-08T14:00:06+08:00"
+  },
+  {
+    "seq": 6,
+    "agent": "driver_advocate",
+    "type": "argument",
+    "content": "The driver arrived 2 minutes early and waited 8 minutes total — 3 minutes beyond the free wait. 5 contact attempts were made with 0 replies from the rider. Under NS-2.1 and NS-3.1, this constitutes a valid no-show.",
+    "timestamp": "2026-10-08T14:00:09+08:00"
+  },
+  {
+    "seq": 7,
+    "agent": "driver_advocate",
+    "type": "rebuttal",
+    "content": "GPS telemetry confirms the driver was at the pickup coordinates (distance=0m). The rider's claim of being at a different entrance is not supported by chat logs — no message was sent during the wait period.",
+    "timestamp": "2026-10-08T14:00:10+08:00"
+  },
+  {
+    "seq": 8,
+    "agent": "rider_advocate",
+    "type": "rebuttal",
+    "content": "The rider's dispute history shows 3 rejected claims, but each case must be judged on its own facts. The fraud flag relates to late cancellations, not no-show disputes.",
+    "timestamp": "2026-10-08T14:00:13+08:00"
+  },
+  {
+    "seq": 9,
+    "agent": "judge",
+    "type": "ruling",
+    "content": "Ruling: charge_upheld. Confidence 0.92. The driver arrived on time, waited beyond the free period, and made 5 unanswered contact attempts. Policy NS-2.1 and NS-3.1 apply. The $5.00 charge is upheld. Amount computed from policy formula, not LLM discretion.",
+    "timestamp": "2026-10-08T14:00:16+08:00"
+  }
+]
