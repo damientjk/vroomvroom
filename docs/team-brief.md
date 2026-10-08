@@ -129,34 +129,34 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 
 ## 6. Roles
 
-| | Person A | Person B | Person C |
+| | Damien | Alpha | Marcus |
 |---|---|---|---|
 | **Role** | Backend & Agents | Frontend & Deployment | Product, Data & Pitch |
 | **Owns** | Evidence tools, agent prompts, orchestration, escalation logic | UI, live agent log, ruling cards, deployment, demo video | Mock policy, test cases, ADP setup, knowledge base, all written deliverables |
 
 **Everyone:** use CodeBuddy / WorkBuddy for your own work and screenshot your chats into the shared folder.
 
-### Person A: Backend & Agents
+### Damien: Backend & Agents
 - Repo scaffold in CodeBuddy (Python + FastAPI)
 - Evidence tools: `route_deviation()`, `no_show_check()`, `fare_validate()`, `history_lookup()`, with tests
-- Refund formulas in code, based on C's policy doc
+- Refund formulas in code, based on Marcus's policy doc
 - Rider Advocate, Driver Advocate and Judge prompts + Pydantic schemas
 - Orchestration (LangGraph): advocates in parallel → judge → escalation branch
 - Escalation protocol + SLA routing logic
-- An API endpoint that streams agent messages for B's UI
+- An API endpoint that streams agent messages for Alpha's UI
 
-### Person B: Frontend & Deployment
+### Alpha: Frontend & Deployment
 - UI: dispute filing form, live "courtroom" agent log, ruling cards for rider and driver, human review queue
-- Build against **mock data first** (using the agreed schemas) so you're not blocked on A
+- Build against **mock data first** (using the agreed schemas) so you're not blocked on Damien
 - GPS replay map (planned vs actual route) if time allows
 - Deploy the app for the live link (CodeBuddy → CloudBase / EdgeOne / Lighthouse)
-- Record and edit the demo video (C writes the script)
+- Record and edit the demo video (Marcus writes the script)
 
-### Person C: Product, Data & Pitch
-- Get the Ryde sample dataset from the WhatsApp group; clean it into the format A needs
+### Marcus: Product, Data & Pitch
+- Get the Ryde sample dataset from the WhatsApp group; clean it into the format Damien needs
 - Write the **mock policy doc** with numbered clauses (Route Deviation + No-Show)
 - Write 8–10 test cases, including edge cases and a safety case that must escalate
-- Set up ADP accounts, check free quota, create the ADP apps and policy/precedent knowledge base, share AppKeys **privately** with A
+- Set up ADP accounts, check free quota, create the ADP apps and policy/precedent knowledge base, share AppKeys **privately** with Damien
 - Run the consistency test and fairness checks (swap advocate order / histories), record results
 - Project title, blurb, description with business metrics, architecture diagram, Miora cover image, demo script
 - Collect everyone's screenshots; own the final submission
@@ -179,42 +179,42 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 - [ ] Write them into `schemas.md` in the repo
 - [ ] Create the GitHub repo, shared screenshot folder, and a shared `.env` handling plan (never commit keys)
 
-**Person A**
-- [ ] Scaffold the repo in CodeBuddy: FastAPI app, folders for `tools/`, `agents/`, `schemas/`, `tests/`, `data/`
-- [ ] Turn `schemas.md` into Pydantic models
-- [ ] Load DISP-002 from `data/` and print it from a test script
+**Damien**
+- [x] Scaffold the repo in CodeBuddy: FastAPI app, folders for `tools/`, `agents/`, `schemas/`, `tests/`, `data/`
+- [x] Turn `schemas.md` into Pydantic models
+- [x] Load DISP-002 from `data/` and print it from a test script
 
-**Person B**
+**Alpha**
 - [ ] Scaffold the frontend in CodeBuddy
 - [ ] Create a `mock_ruling.json` and `mock_agent_log.json` in the agreed schema shape for UI work
 - [ ] Rough page layout: form → courtroom log → ruling cards
 
-**Person C**
+**Marcus**
 - [ ] Check the WhatsApp group for other sample cases (DISP-001 etc.), especially a **route deviation** case
 - [ ] Sign up for ADP; record the free token quota and expiry
 - [ ] Start the policy doc: no-show clauses first, **using DISP-002's numbers** (5 min free wait, $5 fee, 8 min threshold)
 - [ ] Ask the WhatsApp group whether other AI coding tools are allowed alongside CodeBuddy
 
-**Done when:** schemas agreed and in the repo; repo runs; B has a blank UI; C has the ADP account and a draft no-show policy.
+**Done when:** schemas agreed and in the repo; repo runs; Alpha has a blank UI; Marcus has the ADP account and a draft no-show policy.
 
 ---
 
 ### Fri 9 Oct: Evidence tools + policy
 
-**Person A**
+**Damien**
 - [ ] `no_show_check()`: driver distance from pickup, arrival vs scheduled time, total wait, contact attempts, rider replies
 - [ ] `history_lookup()`: ratings, dispute history, fraud flags, account age summary
 - [ ] Tests against DISP-002 (e.g. wait = 8 min, contact attempts = 5, rider replies = 0)
-- [ ] Start `route_deviation()` once C has route data
+- [ ] Start `route_deviation()` once Marcus has route data
 
-**Person B**
+**Alpha**
 - [ ] Dispute filing form (trip ID, dispute type, description)
 - [ ] Ruling cards for rider and driver, showing verdict, amount, confidence, clauses cited, plain explanation
 - [ ] Evidence card component (displays evidence tool output)
 
-**Person C**
+**Marcus**
 - [ ] Finish the policy doc: route deviation, no-show, and safety (S-1.1: never auto-resolve) clauses, all numbered
-- [ ] Send the thresholds and refund formulas to A
+- [ ] Send the thresholds and refund formulas to Damien
 - [ ] If no route deviation case is provided: write one in DISP-002's exact format (WorkBuddy can help)
 - [ ] Start writing test cases: aim for 8–10 (see list below)
 
@@ -224,19 +224,19 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 
 ### Sat 10 Oct: Agents end to end
 
-**Person A**
+**Damien**
 - [ ] `route_deviation()` + tests on the route deviation case
 - [ ] Rider Advocate, Driver Advocate, Judge prompts (same structure for both advocates, length cap, must cite clause IDs and evidence)
 - [ ] Wire the flow: evidence tools → both advocates in parallel → Judge
 - [ ] Refund amount computed in code from the policy formula, not by the Judge
 - [ ] Run DISP-002 end to end in a script. **Expected: charge UPHELD.** Never feed the dataset's "expected ruling" or evidence summary to the agents.
 
-**Person B**
+**Alpha**
 - [ ] Courtroom panel: messages appear one by one, labelled Rider Advocate / Driver Advocate / Judge
 - [ ] Simulate streaming from `mock_agent_log.json` with delays
 
-**Person C**
-- [ ] Create ADP apps for the agents (or confirm with A that we call DeepSeek via one ADP app); share AppKeys privately with A
+**Marcus**
+- [ ] Create ADP apps for the agents (or confirm with Damien that we call DeepSeek via one ADP app); share AppKeys privately with Damien
 - [ ] Finish the test cases
 - [ ] Start the project description: overview + pain points sections
 
@@ -246,18 +246,18 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 
 ### Sun 11 Oct: Integration day ⚠️
 
-**Person A**
+**Damien**
 - [ ] Streaming API endpoint (send each agent message to the UI as it's produced)
 - [ ] `fare_validate()` if time allows
-- [ ] Pair with B to connect frontend and backend
+- [ ] Pair with Alpha to connect frontend and backend
 
-**Person B**
+**Alpha**
 - [ ] Swap mock data for the real API
 - [ ] Handle loading and error states (LLM slow, API fails)
 
-**Person C**
+**Marcus**
 - [ ] Run every test case through the integrated system
-- [ ] Log each result: expected vs actual ruling, time taken, any bugs → shared bug list for A & B
+- [ ] Log each result: expected vs actual ruling, time taken, any bugs → shared bug list for Damien & Alpha
 
 **Done when:** a dispute can be filed in the UI and a real ruling appears, with the agent conversation visible live. **This is the most important milestone. If it slips, cut stretch goals, not this.**
 
@@ -265,17 +265,17 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 
 ### Mon 12 Oct: Stretch goals + fixes
 
-**Person A**
+**Damien**
 - [ ] Escalation: confidence below threshold, or any safety keyword/category → human review queue
 - [ ] SLA routing: safety and high-value disputes prioritised
-- [ ] Fix bugs from C's list
+- [ ] Fix bugs from Marcus's list
 
-**Person B**
+**Alpha**
 - [ ] Human review queue page: list of escalated cases, approve / override buttons
 - [ ] GPS map (planned vs actual route, driver position at pickup) if time allows
 
-**Person C**
-- [ ] Precedent KB in ADP: upload policy doc + 15–20 mock past rulings (if A has time to connect it)
+**Marcus**
+- [ ] Precedent KB in ADP: upload policy doc + 15–20 mock past rulings (if Damien has time to connect it)
 - [ ] Architecture diagram (draft)
 - [ ] Re-run test cases after fixes
 
@@ -285,15 +285,15 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 
 ### Tue 13 Oct: Deploy + test
 
-**Person A**
+**Damien**
 - [ ] Fix remaining bugs; freeze features by evening
 - [ ] Make sure keys are environment variables, not in code
 
-**Person B**
+**Alpha**
 - [ ] **Deploy via CodeBuddy** (CloudBase / EdgeOne / Lighthouse). Screenshot the deploy process for proof.
 - [ ] Test the live link on a phone and a different laptop
 
-**Person C**
+**Marcus**
 - [ ] Consistency test: same case 5 times → same ruling? Record the result.
 - [ ] Fairness tests: swap advocate order; swap rider/driver histories. Record results.
 - [ ] Calculate business metrics: average resolution time, consistency %, % auto-resolved vs escalated
@@ -304,16 +304,16 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 
 ### Wed 14 Oct: Content day
 
-**Person A**
+**Damien**
 - [ ] README: what it is, how to run it, architecture summary
 - [ ] Clean up repo, make sure it's complete for submission
-- [ ] Help B with the demo recording
+- [ ] Help Alpha with the demo recording
 
-**Person B**
-- [ ] Record the demo video (5–8 min) from C's script
+**Alpha**
+- [ ] Record the demo video (5–8 min) from Marcus's script
 - [ ] Polish UI details judges will see
 
-**Person C**
+**Marcus**
 - [ ] Demo script by midday: problem → live dispute → agents arguing → ruling → escalation case → metrics → how we used CodeBuddy
 - [ ] Finish the project description (all 4 required sections)
 - [ ] Final architecture diagram
@@ -332,7 +332,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 - [ ] Review the description, video and repo together
 - [ ] Final fixes only, no new features
 
-**Person C (afternoon)**
+**Marcus (afternoon)**
 - [ ] Go through the submission checklist (Section 8) line by line
 - [ ] **Submit**
 - [ ] Screenshot the submission confirmation
@@ -341,7 +341,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 
 ---
 
-### Test cases to write (Person C)
+### Test cases to write (Marcus)
 
 | # | Type | Scenario | Expected |
 |---|---|---|---|
@@ -419,7 +419,7 @@ Most teams will build the same three-agent pipeline. Where we can differentiate:
 
 - [ ] Frontend: Streamlit or React?
 - [x] Orchestration: **LangGraph**
-- [ ] Assign real names to Person A, B and C
+- [x] Assign real names to Person A, B and C → Damien, Alpha, Marcus
 - [ ] Ask in the WhatsApp group: are other AI coding tools allowed alongside CodeBuddy?
 - [ ] Project name + blurb
 
