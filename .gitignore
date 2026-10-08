@@ -23,5 +23,8 @@ build/
 .vscode/
 .idea/
 
+# Streamlit
+.streamlit/secrets.toml
+
 # Cached LLM responses (local only)
 backend/.cache/

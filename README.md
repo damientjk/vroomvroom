@@ -15,7 +15,7 @@ backend/
   agents/    advocate + judge prompts and orchestration
   schemas/   Pydantic models (see schemas.md)
   tests/
-frontend/    UI (Streamlit or React, TBD)
+frontend/    Streamlit UI (dispute form, courtroom log, ruling cards)
 data/        sample disputes (DISP-002, ...)
 docs/        team brief, sample dataset, policy doc
 schemas.md   agreed JSON shapes
@@ -33,3 +33,18 @@ pytest
 ```
 
 See [docs/team-brief.md](docs/team-brief.md) for the plan and roles.
+
+## Run the frontend
+
+```bash
+cd frontend
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+The UI builds against mock data (`mock_ruling.json`, `mock_agent_log.json`) so it
+is not blocked on the backend. When the FastAPI backend is running, the courtroom
+log streams real agent messages from `POST /api/disputes/resolve`.
+
+Copy `.streamlit/secrets.example.toml` to `.streamlit/secrets.toml` to point at a
+non-default backend URL.
