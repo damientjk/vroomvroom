@@ -82,7 +82,7 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 | Layer | Choice | Notes |
 |---|---|---|
 | Backend | Python + FastAPI | |
-| Orchestration | LangGraph *(or plain asyncio if no one knows LangGraph)* | Graph = evidence → advocates in parallel → judge → escalation branch. Built-in streaming for the UI. |
+| Orchestration | **LangGraph** (decided 8 Oct) | Graph = evidence → advocates in parallel → judge → escalation branch. Built-in streaming for the UI. |
 | Output schemas | Pydantic | |
 | LLM | DeepSeek via **Tencent Cloud ADP** free tokens | Each agent as an ADP app, called with its AppKey |
 | Knowledge base | ADP knowledge base | Policy + precedents |
@@ -141,7 +141,7 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 - Evidence tools: `route_deviation()`, `no_show_check()`, `fare_validate()`, `history_lookup()`, with tests
 - Refund formulas in code, based on C's policy doc
 - Rider Advocate, Driver Advocate and Judge prompts + Pydantic schemas
-- Orchestration (LangGraph or asyncio): advocates in parallel → judge → escalation branch
+- Orchestration (LangGraph): advocates in parallel → judge → escalation branch
 - Escalation protocol + SLA routing logic
 - An API endpoint that streams agent messages for B's UI
 
@@ -174,7 +174,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 ### Thu 8 Oct: Setup + agree the schemas
 
 **Everyone (first thing, 30–60 min call)**
-- [ ] Confirm roles and decide: Streamlit or React? LangGraph or asyncio?
+- [ ] Confirm roles and decide: Streamlit or React? (Orchestration: LangGraph ✅)
 - [ ] Agree the 4 JSON schemas: dispute input, evidence output, advocate brief, ruling. **Base the dispute input on the DISP-002 sample dataset structure.**
 - [ ] Write them into `schemas.md` in the repo
 - [ ] Create the GitHub repo, shared screenshot folder, and a shared `.env` handling plan (never commit keys)
@@ -418,7 +418,7 @@ Most teams will build the same three-agent pipeline. Where we can differentiate:
 ## 11. Open decisions
 
 - [ ] Frontend: Streamlit or React?
-- [ ] Orchestration: LangGraph or plain asyncio?
+- [x] Orchestration: **LangGraph**
 - [ ] Assign real names to Person A, B and C
 - [ ] Ask in the WhatsApp group: are other AI coding tools allowed alongside CodeBuddy?
 - [ ] Project name + blurb
