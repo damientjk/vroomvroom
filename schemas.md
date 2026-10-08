@@ -1,4 +1,4 @@
-# Schemas (DRAFT, to agree on Thu 8 Oct)
+# Schemas
 
 Four JSON shapes shared by backend and frontend. Pydantic models in `backend/schemas/` must match this file.
 
