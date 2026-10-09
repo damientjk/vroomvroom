@@ -202,19 +202,19 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 ### Fri 9 Oct: Evidence tools + policy
 
 **Damien**
-- [ ] `no_show_check()`: driver distance from pickup, arrival vs scheduled time, total wait, contact attempts, rider replies
-- [ ] `history_lookup()`: ratings, dispute history, fraud flags, account age summary
-- [ ] Tests against DISP-002 (e.g. wait = 8 min, contact attempts = 5, rider replies = 0)
+- [x] `no_show_check()`: driver distance from pickup, arrival vs scheduled time, total wait, contact attempts, rider replies
+- [x] `history_lookup()`: ratings, dispute history, fraud flags, account age summary
+- [x] Tests against DISP-002 (e.g. wait = 8 min, contact attempts = 5, rider replies = 0)
 - [ ] Start `route_deviation()` once Marcus has route data
 
 **Alpha**
-- [ ] Dispute filing form (trip ID, dispute type, description)
-- [ ] Ruling cards for rider and driver, showing verdict, amount, confidence, clauses cited, plain explanation
-- [ ] Evidence card component (displays evidence tool output)
+- [x] Dispute filing form (trip ID, dispute type, description)
+- [x] Ruling cards for rider and driver, showing verdict, amount, confidence, clauses cited, plain explanation
+- [x] Evidence card component (displays evidence tool output)
 
 **Marcus**
-- [ ] Finish the policy doc: route deviation, no-show, and safety (S-1.1: never auto-resolve) clauses, all numbered
-- [ ] Send the thresholds and refund formulas to Damien
+- [x] Finish the policy doc: route deviation, no-show, and safety (S-1.1: never auto-resolve) clauses, all numbered
+- [x] Send the thresholds and refund formulas to Damien
 - [ ] If no route deviation case is provided: write one in DISP-002's exact format (WorkBuddy can help)
 - [ ] Start writing test cases: aim for 8–10 (see list below)
 

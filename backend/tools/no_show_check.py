@@ -1,0 +1,197 @@
+"""No-show evidence tool.
+
+Surfaces the facts the Judge needs to rule on a ``no_show_charge`` dispute.
+Implements the gate chain NS-1.1 through NS-1.8 from the policy doc
+(docs/ryde_dispute_policy.md). The tool only computes facts — the outcome
+formula (policy doc §7.3, ``compute_no_show_outcome``) decides the outcome
+and is part of the "refund in code" work scheduled for Sat 10 Oct.
+"""
+
+from __future__ import annotations
+
+import math
+from datetime import datetime
+
+from app.policy_constants import (
+    ARRIVAL_RADIUS_M,
+    FREE_WAIT_TIME_MIN,
+    MINIMUM_CONTACT_ATTEMPTS,
+    NO_SHOW_THRESHOLD_MIN,
+)
+from schemas import DisputeCase, EvidenceOutput
+
+_EARTH_RADIUS_M = 6_371_000
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance between two points, in metres."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lng2 - lng1)
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
+    return 2 * _EARTH_RADIUS_M * math.asin(math.sqrt(a))
+
+
+def _is_between(t: datetime, start: datetime, end: datetime) -> bool:
+    """Return True if *t* is in the half-open interval [start, end]."""
+    return start <= t <= end
+
+
+def no_show_check(case: DisputeCase) -> EvidenceOutput:
+    """Return no-show evidence facts for *case*.
+
+    Computes:
+      - driver_distance_from_pickup_m (NS-1.1)
+      - driver_within_arrival_radius (NS-1.1)
+      - arrived_minutes_vs_scheduled (NS-1.2)
+      - total_wait_min (NS-1.3 / NS-1.4)
+      - free_wait_expired (NS-1.3)
+      - no_show_threshold_reached (NS-1.4)
+      - contact_attempts (NS-1.5)
+      - rider_replies (NS-1.5)
+      - missing_evidence (NS-1.8)
+    """
+    trip = case.trip_data
+    pickup = trip.pickup_location
+
+    # Use policy from the case if present, otherwise fall back to constants.
+    if case.cancellation_policy is not None:
+        free_wait_min = case.cancellation_policy.free_wait_time_min
+        no_show_threshold_min = case.cancellation_policy.no_show_threshold_min
+    else:
+        free_wait_min = FREE_WAIT_TIME_MIN
+        no_show_threshold_min = NO_SHOW_THRESHOLD_MIN
+
+    # --- NS-1.1: Driver GPS arrival verification ---------------------------
+    # Only accept points explicitly marked arrived/waiting. Do not fall back to
+    # the first speed=0 point, which could be a red light en-route.
+    arrived_gps = next(
+        (p for p in case.gps_telemetry if p.status in ("arrived", "waiting")),
+        None,
+    )
+
+    if arrived_gps is not None:
+        driver_distance_from_pickup_m = round(
+            _haversine_m(pickup.lat, pickup.lng, arrived_gps.lat, arrived_gps.lng),
+            1,
+        )
+        driver_within_arrival_radius = driver_distance_from_pickup_m <= ARRIVAL_RADIUS_M
+    else:
+        driver_distance_from_pickup_m = None
+        driver_within_arrival_radius = False
+
+    # --- NS-1.2: Scheduled pickup time verification -----------------------
+    arrival_time = trip.driver_arrival_time
+    if arrival_time is None and arrived_gps is not None:
+        arrival_time = arrived_gps.timestamp
+
+    if arrival_time is not None and trip.scheduled_time is not None:
+        arrived_minutes_vs_scheduled = round(
+            (arrival_time - trip.scheduled_time).total_seconds() / 60.0, 1,
+        )
+    else:
+        arrived_minutes_vs_scheduled = None
+
+    # --- NS-1.3 / NS-1.4: Waiting period -----------------------------------
+    wait_start = trip.driver_wait_start
+    if wait_start is None and arrived_gps is not None:
+        wait_start = arrived_gps.timestamp
+
+    if wait_start is not None and trip.cancellation_time is not None:
+        total_wait_min = round(
+            (trip.cancellation_time - wait_start).total_seconds() / 60.0, 1,
+        )
+    else:
+        total_wait_min = None
+
+    free_wait_expired = (
+        total_wait_min is not None and total_wait_min >= free_wait_min
+    )
+    no_show_threshold_reached = (
+        total_wait_min is not None and total_wait_min >= no_show_threshold_min
+    )
+
+    # --- NS-1.5: Contact attempts -----------------------------------------
+    # Only count attempts made during the waiting period. Messages sent while
+    # the driver was still driving, or after cancellation, do not count.
+    wait_end = trip.cancellation_time
+
+    def _in_wait_period(t: datetime) -> bool:
+        if wait_start is None or wait_end is None:
+            return False
+        return _is_between(t, wait_start, wait_end)
+
+    contact_attempts = sum(
+        1
+        for c in case.chat_logs
+        if c.sender == "driver"
+        and c.type in ("message", "call")
+        and _in_wait_period(c.timestamp)
+    )
+    # Also count app_events: driver_called_rider, but only when there is no
+    # matching chat_logs call entry at the same timestamp (avoid double-count).
+    call_timestamps = {
+        c.timestamp
+        for c in case.chat_logs
+        if c.sender == "driver" and c.type == "call" and _in_wait_period(c.timestamp)
+    }
+    contact_attempts += sum(
+        1
+        for e in case.app_events
+        if e.event_type == "driver_called_rider"
+        and e.timestamp not in call_timestamps
+        and _in_wait_period(e.timestamp)
+    )
+
+    rider_replies = sum(
+        1
+        for c in case.chat_logs
+        if c.sender == "rider" and _in_wait_period(c.timestamp)
+    )
+
+    # --- NS-1.8: Missing evidence handling --------------------------------
+    missing: list[str] = []
+
+    if not case.gps_telemetry:
+        missing.append("gps_telemetry")
+    elif not any(p.status in ("arrived", "waiting") for p in case.gps_telemetry):
+        missing.append("gps_telemetry (no arrived/waiting points)")
+
+    if trip.driver_arrival_time is None and arrived_gps is None:
+        missing.append("driver_arrival_time")
+
+    if trip.cancellation_time is None:
+        missing.append("cancellation_time")
+
+    if not case.chat_logs:
+        missing.append("chat_logs")
+
+    # --- Assemble output ---------------------------------------------------
+    facts: dict[str, object] = {
+        "driver_distance_from_pickup_m": driver_distance_from_pickup_m,
+        "driver_within_arrival_radius": driver_within_arrival_radius,
+        "arrived_minutes_vs_scheduled": arrived_minutes_vs_scheduled,
+        "total_wait_min": total_wait_min,
+        "free_wait_expired": free_wait_expired,
+        "no_show_threshold_reached": no_show_threshold_reached,
+        "contact_attempts": contact_attempts,
+        "rider_replies": rider_replies,
+        "minimum_contact_attempts": MINIMUM_CONTACT_ATTEMPTS,
+        "missing_evidence": missing,
+    }
+
+    flags: list[str] = []
+    if missing:
+        flags.append("NS-1.8_MISSING_EVIDENCE")
+    if arrived_minutes_vs_scheduled is not None and arrived_minutes_vs_scheduled > 0:
+        flags.append("NS-1.2_LATE_ARRIVAL")
+
+    return EvidenceOutput(
+        dispute_id=case.dispute_ticket.dispute_id,
+        tool="no_show_check",
+        facts=facts,
+        flags=flags,
+    )
