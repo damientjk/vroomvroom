@@ -89,7 +89,7 @@ class TripData(_Open):
     cancellation_time: datetime | None = None
     cancellation_fee: float | None = None
     cancellation_reason: str | None = None
-    # Route deviation fields (TBD with Person C)
+    # Route deviation fields (TBD with Marcus)
     planned_route: list[dict[str, Any]] | None = None
     fare_breakdown: dict[str, Any] | None = None
 
@@ -152,7 +152,7 @@ MAX_POINT_CHARS = 400
 class Argument(_Strict):
     point: str = Field(max_length=MAX_POINT_CHARS)
     evidence_refs: list[str] = Field(min_length=1)  # e.g. "no_show_check.total_wait_min"
-    clauses: list[str] = Field(min_length=1)  # e.g. "NS-2.1"
+    clauses: list[str] = Field(min_length=1)  # e.g. "NS-1.6"
 
 
 class AdvocateBrief(_Strict):
@@ -183,6 +183,7 @@ class Ruling(_Strict):
     clauses_cited: list[str]
     explanation_rider: str
     explanation_driver: str
+    conduct_flag: bool = False
     escalated: bool = False
     escalation_reason: str | None = None
 

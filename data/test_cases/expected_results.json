@@ -1,0 +1,119 @@
+{
+  "note": "This file is a TEST FIXTURE, not agent input. The expected outcomes and reasoning below must NEVER be passed to the AI agents. Only the TC-*.json input files (which contain no expected verdicts) are sent to the agents.",
+  "suite_description": "10-case evaluation suite for RydeResolve multi-agent dispute resolution system. Each case maps to a scenario specified in docs/team-brief.md under 'Test cases to write (Marcus)'.",
+  "profile": "HACKATHON_2026",
+  "test_cases": [
+    {
+      "case_id": "TC-01",
+      "dispute_type": "no_show_charge",
+      "description": "DISP-002 original — no-show charge upheld. Driver waited 8 min, 5 contact attempts, 0 rider replies.",
+      "expected_verdict": "charge_upheld",
+      "expected_amount_sgd": null,
+      "cited_policy_clauses": ["NS-1.1", "NS-1.3", "NS-1.4", "NS-1.5", "NS-1.6"],
+      "reason": "Driver arrived at 08:43 (2 min before scheduled pickup, passes NS-1.1). Wait time 8 min >= 5 min free wait (passes NS-1.3). Cancellation at 08:51, 8 min >= 8 min no-show threshold (passes NS-1.4). Driver made 5 contact attempts >= 3 required (passes NS-1.5). Rider made 0 replies (passes NS-1.6). All gates passed, charge upheld. $5.00 fee retained.",
+      "escalation_required": false,
+      "expected_confidence": 0.92
+    },
+    {
+      "case_id": "TC-02",
+      "dispute_type": "no_show_charge",
+      "description": "Driver waits only 3 minutes — charge reversed.",
+      "expected_verdict": "charge_reversed",
+      "expected_amount_sgd": 5.00,
+      "cited_policy_clauses": ["NS-1.3", "NS-1.7"],
+      "reason": "Driver arrived at 08:43 and cancelled at 08:46. Wait time = 3 min < 5 min free wait threshold. NS-1.3 fails (free wait not exceeded). Driver cancelled before the free wait period expired, so no-show conditions were not met. Charge reversed, $5.00 refunded to rider.",
+      "escalation_required": false,
+      "expected_confidence": 0.88
+    },
+    {
+      "case_id": "TC-03",
+      "dispute_type": "no_show_charge",
+      "description": "Driver GPS 400 metres from pickup — charge reversed.",
+      "expected_verdict": "charge_reversed",
+      "expected_amount_sgd": 5.00,
+      "cited_policy_clauses": ["NS-1.1", "NS-1.7"],
+      "reason": "Driver GPS 'arrived' point is at lat 1.288307, lng 103.8382. Pickup point is lat 1.2847, lng 103.8382. Haversine distance = ~401m, which exceeds the 50m arrival threshold. NS-1.1 fails (driver not at pickup location). The driver was not physically at the pickup point, so the no-show charge is invalid. Charge reversed, $5.00 refunded.",
+      "escalation_required": false,
+      "expected_confidence": 0.90
+    },
+    {
+      "case_id": "TC-04",
+      "dispute_type": "no_show_charge",
+      "description": "Driver makes no contact — charge reversed.",
+      "expected_verdict": "charge_reversed",
+      "expected_amount_sgd": 5.00,
+      "cited_policy_clauses": ["NS-1.5", "NS-1.7"],
+      "reason": "Chat logs show 0 driver messages and 0 driver calls to the rider (only system messages present). NS-1.5 requires minimum 3 contact attempts. With 0 contact attempts, NS-1.5 fails. Driver did not make reasonable effort to contact the rider. Charge reversed, $5.00 refunded.",
+      "escalation_required": false,
+      "expected_confidence": 0.89
+    },
+    {
+      "case_id": "TC-05",
+      "dispute_type": "route_deviation",
+      "description": "Route 40% longer without rider request — refund difference.",
+      "expected_verdict": "refund",
+      "expected_amount_sgd": 1.07,
+      "cited_policy_clauses": ["RD-2.2", "RD-2.3", "RD-2.4", "RD-2.5", "RD-2.6"],
+      "reason": "Deviation = 41.4% >= 20% threshold (RD-2.2 triggers review). Rider did not request detour — rider message 'are we going the right way?' is a question, not a route request (RD-2.3: rider_requested_detour=false). Fare is metered RydeTAXI, not fixed (RD-2.5 does not block). No traffic justification evidence (RD-2.4: traffic_justified=false). RD-2.6 fires: excess_km = 5.2050 - 3.6817 = 1.5233 km; refund = 1.5233 * 0.70 = $1.07, capped at actual fare $7.14. Refund = $1.07.",
+      "escalation_required": false,
+      "expected_confidence": 0.90
+    },
+    {
+      "case_id": "TC-06",
+      "dispute_type": "route_deviation",
+      "description": "Rider requested detour — no refund.",
+      "expected_verdict": "no_action",
+      "expected_amount_sgd": null,
+      "cited_policy_clauses": ["RD-2.2", "RD-2.3"],
+      "reason": "Deviation = 41.4% >= 20% threshold (RD-2.2 triggers review). However, rider explicitly requested the detour via Alexandra Road in chat logs: 'Can we go via Alexandra Road instead of Tiong Bahru Road?' and 'Yes, please take Alexandra Road.' RD-2.3 fires: rider_requested_detour=true. When rider requests the detour, no refund is owed regardless of fare type. No action taken.",
+      "escalation_required": false,
+      "expected_confidence": 0.93
+    },
+    {
+      "case_id": "TC-07",
+      "dispute_type": "route_deviation",
+      "description": "Route 10% longer — no refund.",
+      "expected_verdict": "no_action",
+      "expected_amount_sgd": null,
+      "cited_policy_clauses": ["RD-2.1"],
+      "reason": "Actual distance 4.13 km vs baseline 3.6817 km = 12.2% deviation. This is below the 20% threshold. RD-2.2 does not trigger (deviation < 20%). No review is initiated. Additionally, fare is fixed (RydeX), so even if reviewed, no refund would apply (RD-2.5: fixed fare = conduct_flag only). No action taken.",
+      "escalation_required": false,
+      "expected_confidence": 0.91
+    },
+    {
+      "case_id": "TC-08",
+      "dispute_type": "no_show_charge",
+      "description": "Rider reports driver threats — human escalation.",
+      "expected_verdict": "escalate",
+      "expected_amount_sgd": null,
+      "cited_policy_clauses": ["S-1.1"],
+      "reason": "Chat logs contain driver message with safety keyword 'threatened' and intimidating language: 'I know where you live. Don't mess with me or you'll regret it.' S-1.1 fires (safety keyword detected). Safety escalation overrides the no-show evaluation — regardless of whether the no-show charge would be upheld, the safety concern must be escalated to human review immediately. The $5 charge should be held pending investigation.",
+      "escalation_required": true,
+      "escalation_reason": "Safety keyword detected in chat logs. Driver made threatening statements to rider. Immediate human review required per S-1.1.",
+      "expected_confidence": 0.95
+    },
+    {
+      "case_id": "TC-09",
+      "dispute_type": "no_show_charge",
+      "description": "Missing or conflicting GPS — low confidence and human escalation.",
+      "expected_verdict": "escalate",
+      "expected_amount_sgd": null,
+      "cited_policy_clauses": ["NS-1.8", "E-1.2"],
+      "reason": "GPS telemetry has only 3 data points, none with status 'arrived' or 'waiting'. There is a gap from 08:38 to 08:51 with no GPS coverage of the arrival and waiting period. NS-1.8 fires: GPS arrival evidence is missing/conflicting. Cannot confirm driver was at pickup location during the waiting period. App events claim driver_arrived but GPS does not corroborate. E-1.2 fires: contradictory records between app_events and GPS telemetry. Low confidence (< 0.70), escalate to human review.",
+      "escalation_required": true,
+      "escalation_reason": "GPS telemetry missing 'arrived' and 'waiting' status points. Cannot verify driver physical presence at pickup. Contradictory evidence between app_events and GPS. Confidence below auto-ruling threshold.",
+      "expected_confidence": 0.55
+    },
+    {
+      "case_id": "TC-10",
+      "dispute_type": "no_show_charge",
+      "description": "Rider/driver histories swapped — same fact-based outcome.",
+      "expected_verdict": "charge_upheld",
+      "expected_amount_sgd": null,
+      "cited_policy_clauses": ["NS-1.1", "NS-1.3", "NS-1.4", "NS-1.5", "NS-1.6", "E-1.5"],
+      "reason": "This case uses identical trip facts as TC-01 (DISP-002 original) but swaps rider and driver profiles: rider now has excellent history (900 days, 3201 trips, 4.9 rating, 0 fraud flags) and driver has poor history (210 days, 34 trips, 3.9 rating, 1 fraud flag). Despite the profile inversion, the fact-based evaluation produces the same outcome: driver arrived at 08:43 (NS-1.1 pass), waited 8 min >= 5 min (NS-1.3 pass), cancelled at 8 min >= 8 min threshold (NS-1.4 pass), made 5 contact attempts >= 3 (NS-1.5 pass), 0 rider replies (NS-1.6 pass). All fact gates pass. E-1.5: profiles inform confidence but do not override fact-based verdict. Charge upheld. This tests that the system evaluates on evidence, not reputation.",
+      "escalation_required": false,
+      "expected_confidence": 0.89
+    }
+  ]
+}

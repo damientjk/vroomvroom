@@ -3,9 +3,10 @@
   "outcome": "charge_upheld",
   "amount_sgd": 5.0,
   "confidence": 0.92,
-  "clauses_cited": ["NS-2.1", "NS-3.1"],
-  "explanation_rider": "The driver arrived 2 minutes before the scheduled time and waited 8 minutes. Under policy NS-2.1, the free wait period is 5 minutes; after that a no-show fee applies. The driver made 5 contact attempts and you did not reply, so the charge is upheld.",
-  "explanation_driver": "You arrived early and waited beyond the 5-minute free wait period. The rider did not respond to 5 contact attempts. Policy NS-2.1 and NS-3.1 support the no-show charge. The ruling is in your favour.",
+  "clauses_cited": ["NS-1.1", "NS-1.3", "NS-1.4", "NS-1.5", "NS-1.6"],
+  "explanation_rider": "The driver arrived 2 minutes before the scheduled time and waited 8 minutes. Under policy NS-1.3, the free wait period is 5 minutes; after that a no-show fee applies. The driver made 5 contact attempts and you did not reply, so the charge is upheld.",
+  "explanation_driver": "You arrived early and waited beyond the 5-minute free wait period. The rider did not respond to 5 contact attempts. Policy NS-1.1, NS-1.3, NS-1.4, NS-1.5, and NS-1.6 support the no-show charge. The ruling is in your favour.",
+  "conduct_flag": false,
   "escalated": false,
   "escalation_reason": null
 }
