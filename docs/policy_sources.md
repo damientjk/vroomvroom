@@ -2,7 +2,7 @@
 
 **Project:** RydeResolve — Multi-Agent Autonomous Dispute Resolution System
 **Track:** Tencent Cloud AI CAN DO IT Hackathon Singapore 2026, Digital Native Track (Ryde)
-**Document owner:** Person C (Product, Data & Pitch)
+**Document owner:** Marcus (Product, Data & Pitch)
 **Date:** 2026-10-08
 **Companion to:** `docs/ryde_dispute_policy.md`
 
@@ -30,7 +30,7 @@ clauses or quotations have been fabricated.
 | `OFFICIAL (secondary)` | An official Ryde document (e.g., the Driver-Partner Handbook) that supplements primary sources. |
 | `DATASET` | The supplied hackathon dataset (DISP-002). These are the rules the prototype uses, which may differ from real Ryde policy. |
 | `INTERNAL` | Our team's own documents (team brief, schemas). |
-| `PROPOSED` | A design assumption created by Person C for the hackathon. Not from any external source. |
+| `PROPOSED` | A design assumption created by Marcus for the hackathon. Not from any external source. |
 | `UNVERIFIED` | A source that could not be accessed or did not contain the expected content. |
 
 ---
@@ -381,7 +381,7 @@ validation) and the principle that deviation ≠ automatic refund.
 - "amount_sgd is computed in code from the policy formula, never by the
   Judge."
 - Route deviation cases need planned route + fare breakdown (TBD with
-  Person C).
+  Marcus).
 
 ---
 
@@ -473,9 +473,9 @@ this window is not directly relevant to the test case.
 | RYDE_PUBLIC_REFERENCE | 30 days via RydeHELP | SRC-05 |
 
 **Discrepancy:** The dataset does not specify a time limit for filing a
-dispute/waiver. The public policy allows 30 days. Person C could propose
+dispute/waiver. The public policy allows 30 days. Marcus could propose
 implementing a 30-day check as a pre-condition (PROPOSED, not yet in
-clauses — flagged for Person A approval in §6).
+clauses — flagged for Damien approval in §6).
 
 ### 5.7 Arrival radius / GPS verification
 
@@ -492,55 +492,55 @@ RYDE_PUBLIC_REFERENCE profile.
 
 ---
 
-## 6. Open Items Requiring Person A Approval
+## 6. Open Items Requiring Damien Approval
 
-These are design decisions in the policy that Person A (Backend & Agents)
+These are design decisions in the policy that Damien (Backend & Agents)
 must review and approve before implementation:
 
-1. **Minimum contact attempts (NS-1.5):** Proposed at 2. Person A must
+1. **Minimum contact attempts (NS-1.5):** Proposed at 2. Damien must
    confirm this is a reasonable threshold and implement the counting logic
    (messages + calls + driver-called-rider app events).
 
-2. **Arrival radius (NS-1.1):** 10 m for HACKATHON_2026. Person A must
+2. **Arrival radius (NS-1.1):** 10 m for HACKATHON_2026. Damien must
    implement the Haversine distance function and confirm 10 m is the right
    threshold (the dataset's app event says "within 10m" but GPS precision
    in practice may vary).
 
 3. **Route deviation baseline method (RD-2.1):** Proposed as Haversine × 1.3
-   road factor for the hackathon. Person A must decide whether to use a
+   road factor for the hackathon. Damien must decide whether to use a
    real routing API or the simplified Haversine method. If using Haversine,
    confirm the 1.3 factor.
 
-4. **20% deviation threshold (RD-2.2):** Proposed. Person A must confirm
+4. **20% deviation threshold (RD-2.2):** Proposed. Damien must confirm
    this is implementable and reasonable.
 
 5. **Fare type detection (RD-2.5):** The policy assumes the fare breakdown
    will indicate whether the fare is fixed, metered, or distance/time-based.
-   Person A must confirm the schema for fare data (schemas.md notes this as
+   Damien must confirm the schema for fare data (schemas.md notes this as
    TBD: "Route deviation cases will also need planned route + fare
    breakdown").
 
-6. **Speeding threshold (S-1.1):** Proposed at 90 km/h. Person A must
+6. **Speeding threshold (S-1.1):** Proposed at 90 km/h. Damien must
    confirm this is appropriate (Singapore expressway limit is typically
    80–90 km/h). Consider whether the threshold should vary by road type.
 
 7. **Confidence thresholds (E-1.6):** Proposed 0.85 for auto-ruling and
-   0.70 for escalation. Person A must implement these in the Judge prompt
+   0.70 for escalation. Damien must implement these in the Judge prompt
    and the escalation routing logic.
 
 8. **30-day dispute filing window (SRC-05):** The public policy specifies a
-   30-day window for waiver requests. Person A must decide whether to
+   30-day window for waiver requests. Damien must decide whether to
    implement a filing-date check as a pre-condition for the prototype
    (PROPOSED, not yet a numbered clause).
 
 9. **Conduct flag for fixed-fare deviation (RD-2.5):** When a fixed-fare
    trip has an unjustified deviation ≥ 20%, the policy produces `no_action`
-   with a `conduct_flag`. Person A must decide how to surface this flag
+   with a `conduct_flag`. Damien must decide how to surface this flag
    (e.g., in the ruling output, in a separate field, or in the
    explanation).
 
 10. **Missing evidence handling (NS-1.8):** The policy escalates when
-    critical evidence is missing. Person A must confirm the list of
+    critical evidence is missing. Damien must confirm the list of
     critical fields and implement the missing-evidence check.
 
 ---

@@ -52,7 +52,7 @@ def stream_agent_log(dispute_payload: dict[str, Any]):
                     if line:
                         yield json.loads(line)
     except Exception:
-        # Mock fallback — Person A's API not ready yet
+        # Mock fallback — Damien's API not ready yet
         import time
 
         for msg in load_mock_agent_log():
