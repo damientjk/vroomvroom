@@ -28,3 +28,7 @@ build/
 
 # Cached LLM responses (local only)
 backend/.cache/
+backend/.llm_cache/
+
+# ADP smoke test raw response (local only)
+backend/scripts/adp_raw_response.txt
