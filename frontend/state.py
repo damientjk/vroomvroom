@@ -59,7 +59,8 @@ def stream_agent_log(dispute_payload: dict[str, Any]):
     except Exception:
         # Mock fallback — Damien's API not ready yet
         import time
+        import random
 
         for msg in load_mock_agent_log():
-            time.sleep(0.8)
+            time.sleep(random.uniform(0.6, 1.2))
             yield msg

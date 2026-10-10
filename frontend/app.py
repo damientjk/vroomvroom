@@ -20,7 +20,7 @@ import streamlit as st
 
 from state import load_mock_ruling, load_mock_agent_log, load_mock_evidence, stream_agent_log
 from components.dispute_form import render_dispute_form
-from components.courtroom_log import render_courtroom_log
+from components.courtroom_log import render_courtroom_log, render_message, _message_html
 from components.ruling_cards import render_ruling_card, render_evidence_card
 
 st.set_page_config(
@@ -64,15 +64,25 @@ def main() -> None:
             st.session_state.evidence = []
             st.session_state.ruling = None
 
-    # --- Step 2: Resolve (stream agents) ---
+    # --- Step 2: Resolve (stream agents one-by-one) ---
     if st.session_state.resolving:
-        with st.status("Resolving dispute...", expanded=True) as status:
+        st.subheader("Courtroom")
+        st.caption("Agents build their cases in real time")
+
+        courtroom_placeholder = st.empty()
+        status_placeholder = st.empty()
+
+        accumulated_html = ""
+        with status_placeholder.status("Resolving dispute...", expanded=True) as status:
             for msg in stream_agent_log(dispute_payload or {}):
                 st.session_state.agent_log.append(msg)
+                accumulated_html += _message_html(msg)
+                courtroom_placeholder.markdown(accumulated_html, unsafe_allow_html=True)
             st.session_state.evidence = load_mock_evidence()  # TODO: use real evidence from stream
             st.session_state.ruling = load_mock_ruling()  # TODO: use real ruling from stream
             status.update(label="Resolution complete", state="complete")
         st.session_state.resolving = False
+        st.rerun()
 
     # --- Step 3: Courtroom log ---
     if st.session_state.agent_log:
