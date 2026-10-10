@@ -86,7 +86,7 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 | Output schemas | Pydantic | |
 | LLM | **DeepSeek-V3.2** via **Tencent Cloud ADP** (decided 10 Oct) | One Standard-mode ADP app shared by all three agents. Prompts live in our code and are sent per call (`SystemRole`); the app's prompt is left empty. AppKey read from `ADP_APP_KEY` in `.env`. |
 | Knowledge base | ADP knowledge base | Policy + precedents |
-| Frontend | Streamlit (fast) **or** Next.js/React (nicer) | **TO DECIDE** |
+| Frontend | **Streamlit** (Alpha's build, 10 Oct) | Waiting on Marcus to confirm |
 | Dev tool | **CodeBuddy** (mandatory) | |
 | Deploy | CodeBuddy → CloudBase / EdgeOne / Lighthouse | Live link earns bonus points |
 | Visuals | Miora | Cover image, any UI mockups |
@@ -109,7 +109,8 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 ### ADP setup (decided 10 Oct)
 
 - **Everything runs on Marcus's ADP account** (testing, metrics, consistency/fairness runs, live demo), since the knowledge base lives there. Results stay comparable.
-- Until Marcus shares the AppKey, Damien develops on his own `vroomvroom-dev` app. Switching is a one-line `.env` change.
+- Damien's backend now uses Marcus's AppKey (smoke test passed 10 Oct). Damien's `vroomvroom-dev` app is a spare; switching is a one-line `.env` change.
+- ADP's API returns only `TotalTokens` (input/output come back as 0) and seems to exclude ADP's own overhead. Use the **Billing** page to track credits.
 - **App settings (must match on every app we use):** Standard mode · Thinking + Generative model **DeepSeek-V3.2** · Temperature **0.1** (lowest allowed; set in the model dropdown) · Deep Thinking **disabled** · Prompt **empty**.
 - Each call runs two model calls (a planning "thought model" + generation) and adds ~1,650 tokens of ADP overhead.
 - AppKeys are shared by DM only, never in the group chat or the repo.
@@ -235,19 +236,20 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 **Damien**
 - [x] `route_deviation()` + tests on the route deviation case (on `feature/route-deviation`; TC-07 data issues flagged to Marcus)
 - [x] ADP dev app set up and tested (`vroomvroom-dev`)
-- [ ] `compute_no_show_outcome()` (refund/fee formula for no-show, per handoff)
-- [ ] LLM client for ADP (reads `ADP_APP_KEY` from `.env`)
+- [x] `compute_no_show_outcome()` (refund/fee formula for no-show, per handoff)
+- [x] LLM client for ADP (`backend/agents/llm.py`: reads `ADP_APP_KEY` from `.env`, caches responses, `USE_MOCK_LLM=true` replays the cache)
+- [x] Stub `POST /api/disputes/resolve` for Alpha: real evidence tools + outcome formulas, mocked advocate/Judge messages (see API contract below)
 - [ ] Rider Advocate, Driver Advocate, Judge prompts (same structure for both advocates, length cap, must cite clause IDs and evidence)
 - [ ] Wire the flow: evidence tools → both advocates in parallel → Judge
-- [ ] Refund amount computed in code from the policy formula, not by the Judge
+- [x] Refund amount computed in code from the policy formula, not by the Judge (`compute_no_show_outcome()`, `compute_route_deviation_outcome()`)
 - [ ] Run DISP-002 end to end in a script. **Expected: charge UPHELD.** Never feed the dataset's "expected ruling" or evidence summary to the agents.
 
 **Alpha**
-- [ ] Courtroom panel: messages appear one by one, labelled Rider Advocate / Driver Advocate / Judge
-- [ ] Simulate streaming from `mock_agent_log.json` with delays
+- [x] Courtroom panel: messages appear one by one, labelled Rider Advocate / Driver Advocate / Judge
+- [x] Simulate streaming from `mock_agent_log.json` with delays
 
 **Marcus**
-- [ ] Create **one** ADP app with the settings in Section 4 (ADP setup); DM the AppKey to Damien
+- [x] Create **one** ADP app with the settings in Section 4 (ADP setup); DM the AppKey to Damien
 - [ ] Finish the test cases
 - [ ] Start the project description: overview + pain points sections
 
@@ -258,7 +260,9 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 ### Sun 11 Oct: Integration day ⚠️
 
 **Damien**
-- [ ] Streaming API endpoint (send each agent message to the UI as it's produced)
+- [ ] Carry over from Sat if not done: agent prompts, LangGraph flow, DISP-002 end to end
+- [ ] Replace the stub in `POST /api/disputes/resolve` with the real agent flow (same stream format)
+- [ ] `check_safety()` (S-1.1) before the outcome step, so TC-08 escalates instead of being upheld
 - [ ] `fare_validate()` if time allows
 - [ ] Pair with Alpha to connect frontend and backend
 
@@ -269,6 +273,16 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 **Marcus**
 - [ ] Run every test case through the integrated system
 - [ ] Log each result: expected vs actual ruling, time taken, any bugs → shared bug list for Damien & Alpha
+
+**API contract (agreed with Alpha 10 Oct)**
+- `POST /api/disputes/resolve` with `{"dispute_ticket": {"dispute_id": "..."}}`. The backend loads the full case from `data/` by `dispute_id` (e.g. `DISP-001`, `DISP-002-T5`) or test-case prefix (`TC-05`). Unknown ID → 404; bad body → 422.
+- Response: NDJSON (`application/x-ndjson`), one JSON object per line:
+  - `AgentLogMessage` lines (`type`: `evidence` / `argument` / `rebuttal` / `ruling`)
+  - `{"type": "evidence_data", "data": EvidenceOutput}`, one per tool
+  - `{"type": "brief_data", "data": AdvocateBrief}`, one per advocate
+  - `{"type": "ruling_data", "data": Ruling}`, last
+  - `{"type": "error", "content": "..."}` if something fails after streaming starts, then the stream ends
+- `history_lookup` facts keep their nested `facts.rider` / `facts.driver` shape.
 
 **Done when:** a dispute can be filed in the UI and a real ruling appears, with the agent conversation visible live. **This is the most important milestone. If it slips, cut stretch goals, not this.**
 
@@ -428,7 +442,7 @@ Most teams will build the same three-agent pipeline. Where we can differentiate:
 
 ## 11. Open decisions
 
-- [ ] Frontend: Streamlit or React?
+- [ ] Frontend: Streamlit or React? (Alpha has built it in **Streamlit**; waiting on Marcus to confirm)
 - [x] Orchestration: **LangGraph**
 - [x] LLM: one ADP app (DeepSeek-V3.2, temp 0.1) on Marcus's account for everything
 - [x] Assign real names to Person A, B and C → Damien, Alpha, Marcus
