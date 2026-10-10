@@ -1,4 +1,4 @@
-"""Tests for no_show_check() and history_lookup() against DISP-002."""
+"""Tests for evidence tools (no_show_check, history_lookup, route_deviation)."""
 
 import copy
 from pathlib import Path
@@ -6,8 +6,10 @@ from pathlib import Path
 from schemas import DisputeCase, EvidenceOutput
 from tools.history_lookup import history_lookup
 from tools.no_show_check import no_show_check
+from tools.route_deviation import compute_route_deviation_outcome, route_deviation
 
 DATA = Path(__file__).resolve().parents[2] / "data"
+TC = DATA / "test_cases"
 
 
 def _load_disp_002() -> DisputeCase:
@@ -195,3 +197,335 @@ def test_history_lookup_rider_fraud_flag():
     result = history_lookup(_load_disp_002())
     assert "RIDER_FRAUD_FLAG" in result.flags
     assert "DRIVER_FRAUD_FLAG" not in result.flags
+
+
+# ---------- route_deviation: DISP-001 happy path ----------
+
+
+def _load_disp_001() -> DisputeCase:
+    return DisputeCase.model_validate_json((DATA / "DISP-001.json").read_text())
+
+
+def test_route_deviation_returns_evidence_output():
+    result = route_deviation(_load_disp_001())
+    assert isinstance(result, EvidenceOutput)
+    assert result.tool == "route_deviation"
+    assert result.dispute_id == "DISP-001"
+
+
+def test_route_deviation_baseline_distance():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["baseline_distance_km"] == 3.6817
+
+
+def test_route_deviation_actual_distance():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["actual_distance_km"] == 5.205
+
+
+def test_route_deviation_deviation_pct():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["deviation_pct"] == 41.4
+
+
+def test_route_deviation_review_triggered():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["review_triggered"] is True
+
+
+def test_route_deviation_rider_messages_empty():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["rider_route_messages"] == []
+    assert facts["rider_requested_detour"] is False
+
+
+def test_route_deviation_duration_and_speed():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["trip_duration_min"] == 12.0
+    assert facts["avg_speed_kmh"] == 26.0
+
+
+def test_route_deviation_traffic_not_justified():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["traffic_justified"] is False
+
+
+def test_route_deviation_fare_type():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["fare_type"] == "metered"
+    assert facts["per_km_rate_sgd"] == 0.70
+    assert facts["actual_fare_sgd"] == 7.14
+
+
+def test_route_deviation_no_missing_evidence():
+    facts = route_deviation(_load_disp_001()).facts
+    assert facts["missing_evidence"] == []
+
+
+def test_route_deviation_no_flags():
+    result = route_deviation(_load_disp_001())
+    assert result.flags == []
+
+
+# ---------- route_deviation: outcome formula ----------
+
+
+def test_compute_route_deviation_outcome_refund():
+    """DISP-001: metered, 41.4% deviation, no detour, no traffic → refund $1.07."""
+    facts = route_deviation(_load_disp_001()).facts
+    outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
+    assert outcome == "refund"
+    assert amount == 1.07
+    assert clauses == ["RD-2.6"]
+    assert conduct is False
+
+
+# ---------- route_deviation: TC-05 (same as DISP-001, different ID) ----------
+
+
+def test_tc05_route_deviation_refund():
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-05-RD-40pct-refund.json").read_text()
+    )
+    facts = route_deviation(case).facts
+    assert facts["baseline_distance_km"] == 3.6817
+    assert facts["actual_distance_km"] == 5.205
+    assert facts["deviation_pct"] == 41.4
+    assert facts["review_triggered"] is True
+    assert facts["rider_requested_detour"] is False
+    assert facts["fare_type"] == "metered"
+
+    outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
+    assert outcome == "refund"
+    assert amount == 1.07
+    assert clauses == ["RD-2.6"]
+    assert conduct is False
+
+
+# ---------- route_deviation: TC-06 (rider requested detour) ----------
+
+
+def test_tc06_rider_requested_detour_no_refund():
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-06-RD-detour-norefund.json").read_text()
+    )
+    facts = route_deviation(case).facts
+    assert facts["review_triggered"] is True
+    assert facts["rider_requested_detour"] is True
+    assert len(facts["rider_route_messages"]) >= 1
+
+    outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
+    assert outcome == "no_action"
+    assert amount == 0.0
+    assert clauses == ["RD-2.3"]
+    assert conduct is False
+
+
+# ---------- route_deviation: TC-07 (under 20% threshold) ----------
+
+
+def test_tc07_under_threshold_no_refund():
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-07-RD-10pct-norefund.json").read_text()
+    )
+    facts = route_deviation(case).facts
+    assert facts["review_triggered"] is False
+    assert facts["fare_type"] == "fixed"
+
+    outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
+    assert outcome == "no_action"
+    assert amount == 0.0
+    assert clauses == ["RD-2.2"]
+    assert conduct is False
+
+
+# ---------- route_deviation: boundary & missing-evidence paths ----------
+
+
+def _clone_disp_001() -> dict:
+    raw = DisputeCase.model_validate_json((DATA / "DISP-001.json").read_text())
+    return raw.model_dump()
+
+
+def _run_rd_on_clone(mutator) -> EvidenceOutput:
+    case_dict = _clone_disp_001()
+    mutator(case_dict)
+    return route_deviation(DisputeCase.model_validate(case_dict))
+
+
+def test_deviation_exactly_20pct_triggers():
+    """Boundary: deviation_pct == 20.0 → review_triggered = True."""
+    def mutate(d):
+        # baseline = 3.6817 km; for 20.0% deviation we need
+        # actual = baseline * 1.2 ≈ 4.418 km.
+        # Route: pickup → overshoot point (1.28× along pickup→dropoff) → dropoff.
+        # This gives actual = direct * (2*1.28 - 1) = direct * 1.56 ≈ 4.418 km.
+        pickup = d["trip_data"]["pickup_location"]
+        dropoff = d["trip_data"]["dropoff_location"]
+        dlat = dropoff["lat"] - pickup["lat"]
+        dlng = dropoff["lng"] - pickup["lng"]
+        over_lat = pickup["lat"] + dlat * 1.28
+        over_lng = pickup["lng"] + dlng * 1.28
+        d["gps_telemetry"] = [
+            {"timestamp": "2026-09-20T14:00:00+08:00",
+             "lat": pickup["lat"], "lng": pickup["lng"],
+             "speed_kmh": 0, "status": "trip_started"},
+            {"timestamp": "2026-09-20T14:06:00+08:00",
+             "lat": over_lat, "lng": over_lng,
+             "speed_kmh": 40, "status": "in_trip"},
+            {"timestamp": "2026-09-20T14:12:00+08:00",
+             "lat": dropoff["lat"], "lng": dropoff["lng"],
+             "speed_kmh": 0, "status": "trip_completed"},
+        ]
+
+    result = _run_rd_on_clone(mutate)
+    assert result.facts["deviation_pct"] == 20.0
+    assert result.facts["review_triggered"] is True
+
+
+def test_deviation_below_20pct_not_triggered():
+    """Boundary: deviation < 20.0 → review_triggered = False."""
+    def mutate(d):
+        # Use a very direct route (close to straight line) → ~0% deviation.
+        pickup = d["trip_data"]["pickup_location"]
+        dropoff = d["trip_data"]["dropoff_location"]
+        mid_lat = (pickup["lat"] + dropoff["lat"]) / 2
+        mid_lng = (pickup["lng"] + dropoff["lng"]) / 2
+        d["gps_telemetry"] = [
+            {"timestamp": "2026-09-20T14:00:00+08:00",
+             "lat": pickup["lat"], "lng": pickup["lng"],
+             "speed_kmh": 0, "status": "trip_started"},
+            {"timestamp": "2026-09-20T14:06:00+08:00",
+             "lat": mid_lat, "lng": mid_lng,
+             "speed_kmh": 30, "status": "in_trip"},
+            {"timestamp": "2026-09-20T14:12:00+08:00",
+             "lat": dropoff["lat"], "lng": dropoff["lng"],
+             "speed_kmh": 0, "status": "trip_completed"},
+        ]
+
+    result = _run_rd_on_clone(mutate)
+    assert result.facts["deviation_pct"] < 20.0
+    assert result.facts["review_triggered"] is False
+
+
+def test_missing_gps_telemetry():
+    def mutate(d):
+        d["gps_telemetry"] = [
+            {"timestamp": "2026-09-20T14:00:00+08:00",
+             "lat": 1.2847, "lng": 103.8382,
+             "speed_kmh": 0, "status": "trip_started"},
+        ]
+
+    result = _run_rd_on_clone(mutate)
+    assert "gps_telemetry" in result.facts["missing_evidence"]
+    assert "RD_MISSING_EVIDENCE" in result.flags
+    assert result.facts["actual_distance_km"] is None
+    assert result.facts["deviation_pct"] is None
+
+
+def test_missing_fare_breakdown():
+    def mutate(d):
+        d["trip_data"]["fare_breakdown"] = None
+
+    result = _run_rd_on_clone(mutate)
+    assert "fare_breakdown" in result.facts["missing_evidence"]
+    assert "RD_MISSING_EVIDENCE" in result.flags
+    assert result.facts["fare_type"] is None
+
+
+def test_fixed_fare_unjustified_deviation_conduct_flag():
+    """Fixed fare + unjustified deviation ≥20% → no refund, conduct flag."""
+    def mutate(d):
+        d["trip_data"]["fare_breakdown"]["fare_type"] = "fixed"
+        d["trip_data"]["fare_breakdown"]["per_km_rate_sgd"] = None
+
+    result = _run_rd_on_clone(mutate)
+    facts = result.facts
+    assert facts["fare_type"] == "fixed"
+    assert facts["review_triggered"] is True  # DISP-001 route unchanged
+    outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
+    assert outcome == "no_action"
+    assert amount == 0.0
+    assert clauses == ["RD-2.5"]
+    assert conduct is True
+
+
+# ---------- route_deviation: missing evidence escalates ----------
+
+
+def test_missing_gps_escalates():
+    def mutate(d):
+        d["gps_telemetry"] = []
+
+    facts = _run_rd_on_clone(mutate).facts
+    outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
+    assert outcome == "escalate"
+    assert amount == 0.0
+    assert clauses == ["E-1.5"]
+    assert conduct is False
+
+
+def test_missing_fare_breakdown_escalates():
+    def mutate(d):
+        d["trip_data"]["fare_breakdown"] = None
+
+    facts = _run_rd_on_clone(mutate).facts
+    assert compute_route_deviation_outcome(facts)[0] == "escalate"
+
+
+def test_metered_missing_per_km_rate_escalates():
+    def mutate(d):
+        d["trip_data"]["fare_breakdown"]["per_km_rate_sgd"] = None
+
+    result = _run_rd_on_clone(mutate)
+    assert "per_km_rate_sgd" in result.facts["missing_evidence"]
+    assert "RD_MISSING_EVIDENCE" in result.flags
+    assert compute_route_deviation_outcome(result.facts)[0] == "escalate"
+
+
+def test_pickup_equals_dropoff_escalates():
+    def mutate(d):
+        d["trip_data"]["dropoff_location"] = d["trip_data"]["pickup_location"]
+
+    result = _run_rd_on_clone(mutate)
+    assert result.facts["deviation_pct"] is None
+    assert "baseline_route" in result.facts["missing_evidence"]
+    assert compute_route_deviation_outcome(result.facts)[0] == "escalate"
+
+
+# ---------- route_deviation: keyword filter ----------
+
+
+def _add_rider_message(text):
+    def mutate(d):
+        msg = copy.deepcopy(d["chat_logs"][0])
+        msg["sender"] = "rider"
+        msg["content"] = text
+        d["chat_logs"].append(msg)
+
+    return mutate
+
+
+def test_route_keywords_ignore_substrings_and_take():
+    for text in ("Sorry, my mistake, wrong building", "How long will it take?"):
+        facts = _run_rd_on_clone(_add_rider_message(text)).facts
+        assert facts["rider_route_messages"] == [], text
+        assert facts["rider_requested_detour"] is False
+
+
+def test_route_keywords_match_route_request():
+    facts = _run_rd_on_clone(_add_rider_message("Please take the expressway")).facts
+    assert facts["rider_route_messages"] == ["Please take the expressway"]
+    assert facts["rider_requested_detour"] is True
+
+
+def test_judge_can_override_rider_requested_detour():
+    """A complaint mentioning 'route' is surfaced; the Judge clears it."""
+    facts = _run_rd_on_clone(
+        _add_rider_message("Why are you taking this route??")
+    ).facts
+    assert facts["rider_requested_detour"] is True
+    facts["rider_requested_detour"] = False
+    outcome, amount, _, _ = compute_route_deviation_outcome(facts)
+    assert outcome == "refund"
+    assert amount == 1.07
