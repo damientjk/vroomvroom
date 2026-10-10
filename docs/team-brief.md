@@ -239,10 +239,11 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 - [x] `compute_no_show_outcome()` (refund/fee formula for no-show, per handoff)
 - [x] LLM client for ADP (`backend/agents/llm.py`: reads `ADP_APP_KEY` from `.env`, caches responses, `USE_MOCK_LLM=true` replays the cache)
 - [x] Stub `POST /api/disputes/resolve` for Alpha: real evidence tools + outcome formulas, mocked advocate/Judge messages (see API contract below)
-- [ ] Rider Advocate, Driver Advocate, Judge prompts (same structure for both advocates, length cap, must cite clause IDs and evidence)
-- [ ] Wire the flow: evidence tools → both advocates in parallel → Judge
+- [x] Rider Advocate, Driver Advocate, Judge prompts (same structure for both advocates, length cap, must cite clause IDs and evidence) in `backend/agents/`. The Judge decides only route-deviation findings (`rider_requested_detour`, `traffic_justified`); outcome and amount come from code
+- [x] Wire the flow: evidence tools → both advocates in parallel → Judge (plain `asyncio` in `agents/pipeline.py`; LangGraph moved to Sun)
 - [x] Refund amount computed in code from the policy formula, not by the Judge (`compute_no_show_outcome()`, `compute_route_deviation_outcome()`)
-- [ ] Run DISP-002 end to end in a script. **Expected: charge UPHELD.** Never feed the dataset's "expected ruling" or evidence summary to the agents.
+- [x] Run DISP-002 end to end in a script. **Expected: charge UPHELD.** Never feed the dataset's "expected ruling" or evidence summary to the agents. ✅ `python3 scripts/run_case.py DISP-002` → charge_upheld, $5.00, confidence 0.95. Agents only see whitelisted case fields, never `test_case_description`.
+- [x] RD-2.7 applied: route deviation needs ≥ 2 `in_trip` GPS points; TC-11 escalates
 
 **Alpha**
 - [x] Courtroom panel: messages appear one by one, labelled Rider Advocate / Driver Advocate / Judge
@@ -250,7 +251,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 
 **Marcus**
 - [x] Create **one** ADP app with the settings in Section 4 (ADP setup); DM the AppKey to Damien
-- [ ] Finish the test cases
+- [x] Finish the test cases (TC-07 GPS fixed, TC-11 added, RD-2.7 added, 10 Oct)
 - [ ] Start the project description: overview + pain points sections
 
 **Done when:** DISP-002 produces a correct ruling from a script; the courtroom panel animates mock messages.
@@ -260,8 +261,11 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 ### Sun 11 Oct: Integration day ⚠️
 
 **Damien**
-- [ ] Carry over from Sat if not done: agent prompts, LangGraph flow, DISP-002 end to end
+- [ ] Wire `agents/pipeline.py` into LangGraph (evidence → advocates in parallel → Judge → escalation branch)
 - [ ] Replace the stub in `POST /api/disputes/resolve` with the real agent flow (same stream format)
+- [ ] Trim policy text sent to agents (drop "Python computation", Source and Classification blocks): prompts are ~7k tokens per advocate now
+- [ ] Judge option to see the driver's brief first, for Marcus's advocate-order fairness test
+- [ ] Tighten advocate prompt: quote fact values exactly (rider advocate misread `total_wait_min` in the DISP-002 run)
 - [ ] `check_safety()` (S-1.1) before the outcome step, so TC-08 escalates instead of being upheld
 - [ ] `fare_validate()` if time allows
 - [ ] Pair with Alpha to connect frontend and backend
@@ -271,6 +275,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 - [ ] Handle loading and error states (LLM slow, API fails)
 
 **Marcus**
+- [ ] Remove test-case references from the policy doc (RD-2.3 tells the Judge TC-05's answer, and the agents read the policy)
 - [ ] Run every test case through the integrated system
 - [ ] Log each result: expected vs actual ruling, time taken, any bugs → shared bug list for Damien & Alpha
 
