@@ -3,9 +3,16 @@
   "outcome": "charge_upheld",
   "amount_sgd": 5.0,
   "confidence": 0.92,
-  "clauses_cited": ["NS-1.1", "NS-1.3", "NS-1.4", "NS-1.5", "NS-1.6"],
-  "explanation_rider": "The driver arrived 2 minutes before the scheduled time and waited 8 minutes. Under policy NS-1.3, the free wait period is 5 minutes; after that a no-show fee applies. The driver made 5 contact attempts and you did not reply, so the charge is upheld.",
-  "explanation_driver": "You arrived early and waited beyond the 5-minute free wait period. The rider did not respond to 5 contact attempts. Policy NS-1.1, NS-1.3, NS-1.4, NS-1.5, and NS-1.6 support the no-show charge. The ruling is in your favour.",
+  "clauses_cited": [
+    "NS-1.1",
+    "NS-1.2",
+    "NS-1.3",
+    "NS-1.4",
+    "NS-1.5",
+    "NS-1.6"
+  ],
+  "explanation_rider": "The driver arrived 2 minutes before your scheduled pickup and waited 8 minutes, longer than the 5-minute free wait (NS-1.3) and the 8-minute no-show threshold (NS-1.4). The driver tried to reach you 5 times and got no reply (NS-1.5), so the $5.00 fee is upheld (NS-1.6).",
+  "explanation_driver": "You arrived at the pickup point on time, waited past the free wait period and the no-show threshold, and made 5 unanswered contact attempts. The $5.00 no-show fee has been upheld in your favour.",
   "conduct_flag": false,
   "escalated": false,
   "escalation_reason": null
