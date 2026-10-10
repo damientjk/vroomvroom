@@ -745,3 +745,55 @@ def test_safety_keyword_in_description():
     result = safety_check(DisputeCase.model_validate(d))
     assert result.facts["keyword_hits"] == ["harass"]
     assert result.facts["flagged_messages"][0]["sender"] == "dispute_description"
+
+
+# ---------- fare_validate ----------
+
+from tools.fare_validate import fare_validate  # noqa: E402
+
+
+def test_fare_validate_metered_breakdown_consistent():
+    result = fare_validate(_load_disp_001())
+    assert result.tool == "fare_validate"
+    assert result.facts["fare_type"] == "metered"
+    assert result.facts["actual_fare_sgd"] == 7.14
+    assert result.facts["fare_source"] == "fare_breakdown"
+    assert result.facts["per_km_rate_sgd"] == 0.70
+    assert result.facts["surge_applied"] is False
+    assert result.facts["components_sum_sgd"] == 7.14  # 3.50 flag-down + 3.64 distance
+    assert result.facts["breakdown_consistent"] is True
+    assert result.flags == []
+
+
+def test_fare_validate_fixed_fare_has_no_components():
+    facts = fare_validate(_load_case(TC / "TC-07-RD-10pct-norefund.json")).facts
+    assert facts["fare_type"] == "fixed"
+    assert facts["actual_fare_sgd"] == 12.0
+    assert facts["per_km_rate_sgd"] is None
+    assert facts["components_sum_sgd"] is None
+    assert facts["breakdown_consistent"] is None
+
+
+def test_fare_validate_no_show_uses_cancellation_fee():
+    result = fare_validate(_load_disp_002())
+    assert result.facts["actual_fare_sgd"] == 5.0
+    assert result.facts["fare_source"] == "cancellation_fee"
+    assert result.facts["fare_type"] is None
+    assert result.flags == []
+
+
+def test_fare_validate_breakdown_mismatch_flagged():
+    d = _load_disp_001().model_dump()
+    d["trip_data"]["fare_breakdown"]["distance_charge_sgd"] = 5.00
+    result = fare_validate(DisputeCase.model_validate(d))
+    assert result.facts["components_sum_sgd"] == 8.5
+    assert result.facts["breakdown_consistent"] is False
+    assert result.flags == ["FARE_BREAKDOWN_MISMATCH"]
+
+
+def test_fare_validate_no_fare_data_flagged():
+    d = _load_disp_002().model_dump()
+    d["trip_data"]["cancellation_fee"] = None
+    result = fare_validate(DisputeCase.model_validate(d))
+    assert result.facts["actual_fare_sgd"] is None
+    assert result.flags == ["FARE_DATA_MISSING"]

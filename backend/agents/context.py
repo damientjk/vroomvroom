@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from schemas import DisputeCase, EvidenceOutput
+from tools.fare_validate import fare_validate
 from tools.history_lookup import history_lookup
 from tools.no_show_check import no_show_check
 from tools.route_deviation import route_deviation
@@ -149,7 +150,8 @@ def gather_evidence(case: DisputeCase) -> list[EvidenceOutput]:
 
     Always runs ``history_lookup`` and ``safety_check`` (S-1.1 applies to
     every dispute type).  Then runs ``no_show_check`` or
-    ``route_deviation`` depending on the dispute type.
+    ``route_deviation`` depending on the dispute type, then
+    ``fare_validate``.
     """
     evidence: list[EvidenceOutput] = [history_lookup(case), safety_check(case)]
 
@@ -158,5 +160,7 @@ def gather_evidence(case: DisputeCase) -> list[EvidenceOutput]:
         evidence.append(no_show_check(case))
     elif dt == "route_deviation":
         evidence.append(route_deviation(case))
+
+    evidence.append(fare_validate(case))
 
     return evidence
