@@ -17,6 +17,7 @@ from schemas import DisputeCase, EvidenceOutput
 from tools.history_lookup import history_lookup
 from tools.no_show_check import no_show_check
 from tools.route_deviation import route_deviation
+from tools.safety_check import safety_check
 
 _POLICY_DOC_PATH = (
     Path(__file__).resolve().parents[2] / "docs" / "ryde_dispute_policy.md"
@@ -77,8 +78,32 @@ def load_policy_clauses() -> dict[str, str]:
     return _POLICY_CLAUSES
 
 
+# Clause parts the agents need; Classification, Source, Discrepancy and
+# Python computation are notes for the team, and roughly double the prompt.
+_AGENT_PARTS = ("Rule", "Evidence required", "Expected outcome")
+_PART_RE = re.compile(r"^- \*\*([^*]+?):?\*\*", re.MULTILINE)
+# A sentence naming a test case (e.g. RD-2.3's "TC-05 tests this: ...")
+# would hand the Judge that case's answer.
+_TEST_CASE_SENTENCE_RE = re.compile(
+    r"\s*[^.!?]*\b(?:TC-\d+|DISP-\d+)\b.*?\.(?=\s|$)", re.DOTALL
+)
+
+
+def _agent_clause_text(text: str) -> str:
+    """Keep only the parts of a clause section the agents need."""
+    heading, _, body = text.partition("\n")
+    starts = [m.start() for m in _PART_RE.finditer(body)] + [len(body)]
+    kept = [
+        body[a:b].strip()
+        for a, b in zip(starts, starts[1:])
+        if _PART_RE.match(body[a:b]).group(1) in _AGENT_PARTS
+    ]
+    kept_text = _TEST_CASE_SENTENCE_RE.sub("", "\n\n".join(kept))
+    return heading + "\n\n" + kept_text
+
+
 def relevant_clauses(dispute_type: str) -> dict[str, str]:
-    """Return clauses relevant to *dispute_type*.
+    """Return clauses relevant to *dispute_type*, trimmed for the agents.
 
     For ``no_show_charge``: all ``NS-*`` clauses.
     For ``route_deviation``: all ``RD-*`` clauses.
@@ -87,7 +112,7 @@ def relevant_clauses(dispute_type: str) -> dict[str, str]:
     all_clauses = load_policy_clauses()
     prefix = "NS-" if dispute_type == "no_show_charge" else "RD-"
     return {
-        cid: text
+        cid: _agent_clause_text(text)
         for cid, text in all_clauses.items()
         if cid.startswith(prefix) or cid.startswith("E-") or cid.startswith("S-")
     }
@@ -122,10 +147,11 @@ def case_summary(case: DisputeCase) -> dict[str, Any]:
 def gather_evidence(case: DisputeCase) -> list[EvidenceOutput]:
     """Run all relevant evidence tools for *case*.
 
-    Always runs ``history_lookup``.  Then runs ``no_show_check`` or
+    Always runs ``history_lookup`` and ``safety_check`` (S-1.1 applies to
+    every dispute type).  Then runs ``no_show_check`` or
     ``route_deviation`` depending on the dispute type.
     """
-    evidence: list[EvidenceOutput] = [history_lookup(case)]
+    evidence: list[EvidenceOutput] = [history_lookup(case), safety_check(case)]
 
     dt = case.dispute_ticket.dispute_type
     if dt == "no_show_charge":

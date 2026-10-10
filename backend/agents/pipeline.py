@@ -1,41 +1,30 @@
 """End-to-end pipeline: evidence -> advocates (parallel) -> judge -> ruling.
 
-Plain asyncio; LangGraph integration is a future step.
+Runs the LangGraph in ``agents/graph.py`` to completion; the API streams
+the same graph node by node instead.
 """
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
-from agents.advocates import run_advocate
-from agents.context import gather_evidence, relevant_clauses
-from agents.judge import run_judge
+from agents.graph import dispute_graph
 from schemas import DisputeCase
 
 
-async def resolve_case(case: DisputeCase) -> dict[str, Any]:
+async def resolve_case(
+    case: DisputeCase, *, driver_first: bool = False,
+) -> dict[str, Any]:
     """Resolve a dispute end-to-end.
 
-    1. Gather evidence (real tools).
-    2. Run both advocates in parallel (asyncio.gather).
-    3. Run the Judge.
-    4. Return ``{"evidence": [...], "rider_brief": ..., "driver_brief": ..., "ruling": ...}``.
+    Returns ``{"evidence": [...], "rider_brief": ..., "driver_brief": ...,
+    "ruling": ..., "routed_to": "issue_ruling" | "human_review"}``.
     """
-    dispute_type = case.dispute_ticket.dispute_type
-    clauses = relevant_clauses(dispute_type)
-    evidence = gather_evidence(case)
-
-    rider_brief, driver_brief = await asyncio.gather(
-        run_advocate("rider", case, evidence, clauses),
-        run_advocate("driver", case, evidence, clauses),
-    )
-
-    ruling = await run_judge(case, evidence, clauses, rider_brief, driver_brief)
-
+    state = await dispute_graph.ainvoke({"case": case, "driver_first": driver_first})
     return {
-        "evidence": evidence,
-        "rider_brief": rider_brief,
-        "driver_brief": driver_brief,
-        "ruling": ruling,
+        "evidence": state["evidence"],
+        "rider_brief": state["rider_brief"],
+        "driver_brief": state["driver_brief"],
+        "ruling": state["ruling"],
+        "routed_to": state["routed_to"],
     }

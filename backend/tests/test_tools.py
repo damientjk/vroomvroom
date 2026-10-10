@@ -687,3 +687,61 @@ def test_tc11_one_in_trip_point_escalates():
     assert outcome == "escalate"
     assert amount == 0.0
     assert clauses == ["RD-2.7", "E-1.5"]
+
+
+# ---------- safety_check (S-1.1) ----------
+
+from tools.safety_check import safety_check, safety_override  # noqa: E402
+
+
+def _load_case(path: Path) -> DisputeCase:
+    return DisputeCase.model_validate_json(path.read_text())
+
+
+def test_safety_no_false_positive_on_white_toyota():
+    """'hit' must not match 'White Toyota' (word-start matching)."""
+    result = safety_check(_load_disp_002())
+    assert result.facts["safety_incident"] is False
+    assert result.facts["keyword_hits"] == []
+    assert result.flags == []
+    assert safety_override(result.facts) is None
+
+
+def test_safety_only_tc08_flagged_across_dataset():
+    paths = sorted(DATA.glob("DISP-00?.json")) + sorted(TC.glob("TC-*.json"))
+    flagged = [
+        p.name for p in paths
+        if safety_check(_load_case(p)).facts["safety_incident"]
+    ]
+    assert flagged == ["TC-08-SAFETY-escalate.json"]
+
+
+def test_safety_tc08_threat_keywords():
+    result = safety_check(_load_case(TC / "TC-08-SAFETY-escalate.json"))
+    assert "threat" in result.facts["keyword_hits"]
+    assert result.facts["flagged_messages"]
+    assert result.flags == ["S-1.1_SAFETY_INCIDENT"]
+    assert safety_override(result.facts) == ("escalate", 0.0, ["S-1.1", "S-1.2"], False)
+
+
+def _with_speed(speed: float) -> DisputeCase:
+    d = _load_disp_002().model_dump()
+    d["gps_telemetry"][0]["speed_kmh"] = speed
+    return DisputeCase.model_validate(d)
+
+
+def test_safety_speeding_boundary():
+    """B15/B16: 90 km/h is not speeding, 91 km/h is."""
+    assert safety_check(_with_speed(90)).facts["speeding"] is False
+    at_91 = safety_check(_with_speed(91)).facts
+    assert at_91["speeding"] is True
+    assert at_91["safety_incident"] is True
+    assert at_91["categories"] == ["speeding: 91.0 km/h"]
+
+
+def test_safety_keyword_in_description():
+    d = _load_disp_002().model_dump()
+    d["dispute_ticket"]["description"] = "The driver harassed me the whole way."
+    result = safety_check(DisputeCase.model_validate(d))
+    assert result.facts["keyword_hits"] == ["harass"]
+    assert result.facts["flagged_messages"][0]["sender"] == "dispute_description"
