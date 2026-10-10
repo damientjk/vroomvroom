@@ -1,0 +1,210 @@
+{
+  "data_label": "TEST_CASE",
+  "test_case_id": "TC-07",
+  "test_case_description": "Route 10% longer — no refund. Deviation is 12% (under 20% threshold). RD-2.2 fails (no review triggered). Fixed fare (RydeX), so even if reviewed, no refund. No action.",
+  "dispute_ticket": {
+    "dispute_id": "DISP-001-T7",
+    "trip_id": "TRIP-2026-10012-T7",
+    "filed_by": "rider",
+    "dispute_type": "route_deviation",
+    "description": "I think the driver took a slightly longer route to VivoCity. The fare was $12.00 but I usually pay around $10. I want a refund for the difference.",
+    "filed_at": "2026-09-20T15:00:00+08:00",
+    "status": "open"
+  },
+  "rider_profile": {
+    "rider_id": "R-4521",
+    "name": "Sarah Tan",
+    "account_age_days": 540,
+    "total_trips": 87,
+    "avg_rating": 4.2,
+    "dispute_history": {
+      "total_disputes": 1,
+      "upheld": 0,
+      "rejected": 1
+    },
+    "fraud_flags": 0,
+    "fraud_flag_details": null,
+    "payment_method": "credit_card"
+  },
+  "driver_profile": {
+    "driver_id": "D-3107",
+    "name": "Raj Kumar",
+    "account_age_days": 365,
+    "total_trips": 250,
+    "avg_rating": 4.6,
+    "dispute_history": {
+      "total_disputes": 1,
+      "upheld_against": 1,
+      "rejected": 0
+    },
+    "fraud_flags": 0,
+    "fraud_flag_details": null,
+    "vehicle": "Toyota Prius (SGP 8821 K)",
+    "service_type": "RydeX"
+  },
+  "trip_data": {
+    "trip_id": "TRIP-2026-10012-T7",
+    "rider_id": "R-4521",
+    "driver_id": "D-3107",
+    "pickup_location": {
+      "name": "Tiong Bahru Plaza",
+      "lat": 1.2847,
+      "lng": 103.8382
+    },
+    "dropoff_location": {
+      "name": "VivoCity",
+      "lat": 1.2648,
+      "lng": 103.8223
+    },
+    "scheduled_time": "2026-09-20T14:30:00+08:00",
+    "driver_arrival_time": "2026-09-20T14:28:00+08:00",
+    "driver_wait_start": "2026-09-20T14:28:00+08:00",
+    "cancellation_time": null,
+    "cancellation_fee": null,
+    "cancellation_reason": null,
+    "planned_route": [
+      {
+        "name": "Tiong Bahru Plaza",
+        "lat": 1.2847,
+        "lng": 103.8382
+      },
+      {
+        "name": "Tiong Bahru Road",
+        "lat": 1.2750,
+        "lng": 103.8250
+      },
+      {
+        "name": "VivoCity",
+        "lat": 1.2648,
+        "lng": 103.8223
+      }
+    ],
+    "fare_breakdown": {
+      "fare_type": "fixed",
+      "actual_fare_sgd": 12.00,
+      "per_km_rate_sgd": null,
+      "flag_down_fare_sgd": null,
+      "distance_charge_sgd": null,
+      "surge_applied": false,
+      "service_type": "RydeX"
+    }
+  },
+  "gps_telemetry": [
+    {
+      "timestamp": "2026-09-20T14:30:00+08:00",
+      "lat": 1.2847,
+      "lng": 103.8382,
+      "speed_kmh": 0,
+      "status": "trip_started"
+    },
+    {
+      "timestamp": "2026-09-20T14:31:30+08:00",
+      "lat": 1.2795,
+      "lng": 103.8440,
+      "speed_kmh": 34,
+      "status": "in_trip"
+    },
+    {
+      "timestamp": "2026-09-20T14:33:00+08:00",
+      "lat": 1.2740,
+      "lng": 103.8440,
+      "speed_kmh": 35,
+      "status": "in_trip"
+    },
+    {
+      "timestamp": "2026-09-20T14:34:30+08:00",
+      "lat": 1.2700,
+      "lng": 103.8380,
+      "speed_kmh": 36,
+      "status": "in_trip"
+    },
+    {
+      "timestamp": "2026-09-20T14:36:00+08:00",
+      "lat": 1.2680,
+      "lng": 103.8310,
+      "speed_kmh": 32,
+      "status": "in_trip"
+    },
+    {
+      "timestamp": "2026-09-20T14:37:30+08:00",
+      "lat": 1.2660,
+      "lng": 103.8260,
+      "speed_kmh": 28,
+      "status": "in_trip"
+    },
+    {
+      "timestamp": "2026-09-20T14:39:00+08:00",
+      "lat": 1.2648,
+      "lng": 103.8223,
+      "speed_kmh": 0,
+      "status": "trip_completed"
+    }
+  ],
+  "chat_logs": [
+    {
+      "timestamp": "2026-09-20T14:28:00+08:00",
+      "sender": "driver",
+      "type": "message",
+      "content": "Hi, I've arrived at Tiong Bahru Plaza. White Toyota Prius, plate SGP 8821 K."
+    },
+    {
+      "timestamp": "2026-09-20T14:29:00+08:00",
+      "sender": "rider",
+      "type": "message",
+      "content": "Coming down now."
+    },
+    {
+      "timestamp": "2026-09-20T14:39:00+08:00",
+      "sender": "system",
+      "type": "system",
+      "content": "Trip completed. Fare: $12.00 (fixed, RydeX). Distance: 4.13 km."
+    }
+  ],
+  "app_events": [
+    {
+      "timestamp": "2026-09-20T14:20:00+08:00",
+      "event_type": "booking_confirmed",
+      "details": "Rider R-4521 booked trip TRIP-2026-10012-T7 from Tiong Bahru Plaza to VivoCity. Scheduled pickup 14:30. Service type: RydeX (fixed fare)."
+    },
+    {
+      "timestamp": "2026-09-20T14:20:15+08:00",
+      "event_type": "driver_assigned",
+      "details": "Driver D-3107 (Raj Kumar, Toyota Prius SGP 8821 K) assigned. ETA 8 min. Service type: RydeX."
+    },
+    {
+      "timestamp": "2026-09-20T14:20:20+08:00",
+      "event_type": "driver_en_route",
+      "details": "Driver started navigating to pickup location. Live tracking enabled."
+    },
+    {
+      "timestamp": "2026-09-20T14:28:00+08:00",
+      "event_type": "driver_arrived",
+      "details": "Driver GPS within 10m of pickup point. Speed 0 km/h. Auto-arrival confirmed."
+    },
+    {
+      "timestamp": "2026-09-20T14:28:05+08:00",
+      "event_type": "rider_notified",
+      "details": "Push notification + in-app alert sent to rider: 'Your driver has arrived.'"
+    },
+    {
+      "timestamp": "2026-09-20T14:30:00+08:00",
+      "event_type": "trip_started",
+      "details": "Rider boarded. Trip started. Fixed fare: $12.00. Service type: RydeX."
+    },
+    {
+      "timestamp": "2026-09-20T14:39:00+08:00",
+      "event_type": "trip_completed",
+      "details": "Trip completed at VivoCity. Total distance: 4.13 km. Total fare: $12.00 (fixed)."
+    },
+    {
+      "timestamp": "2026-09-20T14:39:05+08:00",
+      "event_type": "fare_charged",
+      "details": "Fixed fare of $12.00 charged to rider payment method (credit_card). No surge applied."
+    },
+    {
+      "timestamp": "2026-09-20T15:00:00+08:00",
+      "event_type": "dispute_filed",
+      "details": "Rider filed route_deviation dispute. Alleges driver took slightly longer route. Actual distance 4.13 km vs baseline 3.68 km (12% deviation)."
+    }
+  ]
+}

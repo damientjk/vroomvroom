@@ -2,8 +2,8 @@
 
 **Project:** RydeResolve — Multi-Agent Autonomous Dispute Resolution System
 **Track:** Tencent Cloud AI CAN DO IT Hackathon Singapore 2026, Digital Native Track (Ryde)
-**Document owner:** Person C (Product, Data & Pitch)
-**Version:** 1.0 — draft for Person A review
+**Document owner:** Marcus (Product, Data & Pitch)
+**Version:** 1.0 — draft for Damien review
 **Date:** 2026-10-08
 
 ---
@@ -84,7 +84,7 @@ When sources conflict, the following order applies **within each profile**:
 2. The Ryde Driver-Partner Handbook 2024 (secondary official source).
 3. This policy document's `PROPOSED` rules — never override official policy.
 
-`PROPOSED` rules are design assumptions created by Person C for the
+`PROPOSED` rules are design assumptions created by Marcus for the
 hackathon. They are **not** claims about Ryde's actual policy. Every
 `PROPOSED` rule is labelled as such so that no one mistakes it for official
 policy.
@@ -324,7 +324,7 @@ NS-1.6  Cancellation fee eligible → charge upheld
 
 - **Classification:** `PROPOSED` for both profiles. Neither the dataset nor
   the official help articles specify a minimum number of contact attempts.
-  Person C proposes 2 as a reasonable minimum (at least one message and one
+  Marcus proposes 2 as a reasonable minimum (at least one message and one
   call, or two messages).
 
 - **Evidence required:**
@@ -559,7 +559,7 @@ warrant a conduct flag or partial refund in specific cases) from a
   | RYDE_PUBLIC_REFERENCE | Not specified in official sources; 20% is `PROPOSED` |
 
 - **Classification:** `PROPOSED`. This threshold is a design assumption from
-  Person C, based on the team brief's example (`R-3.2: deviation >20%
+  Marcus, based on the team brief's example (`R-3.2: deviation >20%
   without rider request → refund the difference`). It is **not** from any
   verified Ryde source.
 
@@ -607,7 +607,12 @@ warrant a conduct flag or partial refund in specific cases) from a
   - `chat_logs` with rider messages containing route-related content.
   - `app_events` with stop additions or route changes.
   - The LLM agents interpret whether a message constitutes a detour request
-    or agreement.
+    or agreement. The keyword filter (`contains_route_content()`) surfaces
+    candidates only — it cannot distinguish a request ("please take the
+    expressway") from a complaint ("why are you taking this route??"). The
+    Judge LLM makes the final intent determination. TC-05 tests this: the
+    rider's message "Are we going the right way?" matches the keyword filter
+    but is a question, not a route request.
 
 - **Expected outcome:**
   - If a rider-requested detour is evidenced → outcome `no_action`,
@@ -691,7 +696,7 @@ warrant a conduct flag or partial refund in specific cases) from a
   refund logic for metered/distance fares is our design).
 
 - **Evidence required:**
-  - `trip_data.fare_breakdown` or equivalent fare data (TBD with Person A —
+  - `trip_data.fare_breakdown` or equivalent fare data (TBD with Damien —
     see `schemas.md` note: "Route deviation cases will also need planned
     route + fare breakdown").
   - Service type (RydeX, RydeTAXI, etc.) if available.
@@ -760,6 +765,54 @@ warrant a conduct flag or partial refund in specific cases) from a
       refund_sgd = min(excess_fare_sgd, actual_fare_sgd)
       outcome = "refund"
       amount_sgd = refund_sgd
+  ```
+
+### RD-2.7 — Missing Evidence Handling
+
+- **Rule:** If any critical evidence required to evaluate a route-deviation
+  dispute is missing or insufficient, the case must be escalated to human
+  review. No automatic ruling (for or against either party) may be issued.
+
+  Critical evidence fields for route deviation:
+  1. `gps_telemetry` — must have at least 2 in-trip points to compute
+     actual distance. If absent or with fewer than 2 in-trip points,
+     deviation cannot be computed.
+  2. `trip_data.fare_breakdown` — must be present to determine fare type
+     (fixed, metered, distance_time). If absent, fare type cannot be
+     determined.
+  3. `fare_breakdown.per_km_rate_sgd` — must be present when fare type is
+     metered or distance_time and RD-2.6 would fire (deviation ≥ 20%, no
+     rider request, no traffic justification). If absent, refund cannot be
+     computed.
+
+- **Classification:** `PROPOSED` (mirrors NS-1.8 pattern for no-show).
+
+- **Evidence required:**
+  - All inputs required by RD-2.1 through RD-2.6, verified for completeness.
+
+- **Expected outcome:**
+  - Outcome: `escalate`.
+  - `amount_sgd`: 0.00.
+  - `cited_policy_clauses`: `["RD-2.7", "E-1.5"]`.
+  - `confidence`: < 0.70 (below auto-ruling threshold).
+  - `escalated`: true.
+  - `escalation_reason`: "missing evidence for route deviation: [fields]".
+
+- **Source:** `PROPOSED`.
+
+- **Python computation:**
+  ```python
+  missing = []
+  if len([p for p in gps_telemetry if p.status == "in_trip"]) < 2:
+      missing.append("gps_telemetry")
+  if fare_breakdown is None:
+      missing.append("fare_breakdown")
+  elif fare_type in ("metered", "distance_time") and per_km_rate_sgd is None \
+       and deviation_pct >= 20 and not rider_requested_detour \
+       and not traffic_justified:
+      missing.append("per_km_rate_sgd")
+  if missing:
+      return ("escalate", 0.00, ["RD-2.7", "E-1.5"], False)
   ```
 
 ---
@@ -997,7 +1050,7 @@ evidence in any dispute.
   - `explanation_driver`: plain-language explanation for the driver.
   - `clauses_cited`: list of clause IDs applied.
 
-- **Classification:** `PROPOSED` (thresholds are Person C's design).
+- **Classification:** `PROPOSED` (thresholds are Marcus's design).
 
 - **Evidence required:** The full evidence set and the Judge's reasoning.
 
@@ -1041,15 +1094,16 @@ evidence in any dispute.
 
 ### Route Deviation — Decision Matrix (HACKATHON_2026)
 
-| Deviation ≥ 20%? (RD-2.2) | Rider requested detour? (RD-2.3) | Traffic justified? (RD-2.4) | Fare type (RD-2.5) | Outcome | Amount (S$) |
-|---|---|---|---|---|---|
-| No | — | — | — | `no_action` | 0.00 |
-| Yes | Yes | — | — | `no_action` | 0.00 |
-| Yes | No | Yes | Fixed | `no_action` | 0.00 |
-| Yes | No | Yes | Metered | `no_action` | 0.00 |
-| Yes | No | No | Fixed | `no_action` + conduct flag | 0.00 |
-| Yes | No | No | Metered | `refund` | computed excess |
-| Yes | No | No | Distance/time | `refund` | computed excess |
+| Deviation ≥ 20%? (RD-2.2) | Rider requested detour? (RD-2.3) | Traffic justified? (RD-2.4) | Fare type (RD-2.5) | Missing evidence? (RD-2.7) | Outcome | Amount (S$) |
+|---|---|---|---|---|---|---|
+| No | — | — | — | No | `no_action` | 0.00 |
+| Yes | Yes | — | — | No | `no_action` | 0.00 |
+| Yes | No | Yes | Fixed | No | `no_action` | 0.00 |
+| Yes | No | Yes | Metered | No | `no_action` | 0.00 |
+| Yes | No | No | Fixed | No | `no_action` + conduct flag | 0.00 |
+| Yes | No | No | Metered | No | `refund` | computed excess |
+| Yes | No | No | Distance/time | No | `refund` | computed excess |
+| — | — | — | — | Yes | `escalate` | 0.00 |
 
 ### Safety — Decision Matrix
 
@@ -1068,11 +1122,11 @@ evidence in any dispute.
 
 ---
 
-## 7. Implementation Handoff for Person A
+## 7. Implementation Handoff for Damien
 
 ### 7.1 Constants to implement
 
-Person A should implement these as a Python constants module (e.g.,
+Damien should implement these as a Python constants module (e.g.,
 `backend/app/policy_constants.py`) so that profile switching is a one-line
 change.
 
@@ -1114,12 +1168,13 @@ SPOT_CHECK_THRESHOLD = 0.70       # E-1.6 (PROPOSED)
 
 ### 7.2 Evidence tool requirements
 
-Person A's evidence tools must surface these facts for the Judge:
+Damien's evidence tools must surface these facts for the Judge:
 
 **`no_show_check()` must output:**
 ```json
 {
   "driver_distance_from_pickup_m": 0.0,
+  "arrived": true,
   "arrived_minutes_vs_scheduled": -2.0,
   "total_wait_min": 8.0,
   "free_wait_expired": true,
@@ -1141,6 +1196,7 @@ Person A's evidence tools must surface these facts for the Judge:
   "rider_requested_detour": false,
   "trip_duration_min": 18.5,
   "avg_speed_kmh": 25.3,
+  "traffic_justified": false,
   "fare_type": "fixed",
   "per_km_rate_sgd": null
 }
@@ -1189,6 +1245,10 @@ def compute_no_show_outcome(facts, constants):
 
 def compute_route_deviation_outcome(facts, constants):
     """Returns (outcome, amount_sgd, clauses_cited, conduct_flag)."""
+    # Gate 0: Missing evidence → escalate
+    if facts.missing_evidence:
+        return ("escalate", 0.00, ["RD-2.7", "E-1.5"], False)
+
     if not facts.review_triggered:
         return ("no_action", 0.00, ["RD-2.2"], False)
 
@@ -1226,6 +1286,14 @@ def check_safety(chat_logs, gps_telemetry, description, constants):
     return (False, None)
 ```
 
+**Note on `conduct_flag`:** `compute_route_deviation_outcome()` returns a
+4-tuple `(outcome, amount_sgd, clauses_cited, conduct_flag)`. The
+`conduct_flag` must be surfaced in the `Ruling` output (see
+`schemas.md §4` — the `conduct_flag` field). When `True`, it indicates
+that a fixed-fare trip had an unjustified deviation ≥ 20% with no rider
+request and no traffic justification. No monetary refund is issued, but
+the driver's conduct is flagged for review.
+
 ### 7.4 Judge prompt constraints
 
 The Judge prompt must include:
@@ -1253,6 +1321,28 @@ Running DISP-002 through the no-show chain:
 | E-1.6 | High confidence (all evidence present, consistent) | ~0.90+ |
 
 **Expected ruling: `charge_upheld`, S$5.00, confidence ~0.90+.**
+
+### 7.6 Verification: DISP-002 verdict derived from evidence, not hardcoded
+
+The `compute_no_show_outcome()` function in §7.3 produces the DISP-002
+verdict by walking the evidence-derived gate chain, not by returning a
+hardcoded answer. Tracing the function with DISP-002's facts:
+
+| Step | Code path | Facts from evidence | Result |
+|---|---|---|---|
+| 1 | `if facts.missing_evidence:` | `missing_evidence = []` (no gaps) | Not triggered |
+| 2 | `if not facts.arrived:` | `arrived = True` (GPS 0m ≤ 10m) | Not triggered |
+| 3 | `if not facts.free_wait_expired:` | `free_wait_expired = True` (8 min ≥ 5 min) | Not triggered |
+| 4 | `if not facts.no_show_threshold_reached:` | `no_show_threshold_reached = True` (8 min ≥ 8 min) | Not triggered |
+| 5 | `if facts.contact_attempts < 2:` | `contact_attempts = 5` (5 ≥ 2) | Not triggered |
+| 6 | `return ("charge_upheld", 5.00, ["NS-1.6"])` | All gates passed | **Result** |
+
+The outcome and amount are determined entirely by the evidence facts
+produced by `no_show_check()`. The dataset's "Expected ruling" field is
+never read by the code. The "Evidence Summary" in
+`docs/sample-dataset-DISP-002.md` is never passed to the agents. This
+satisfies the constraint in `schemas.md`: *"Never pass the dataset's
+'expected ruling' or evidence summary to the agents."*
 
 ---
 

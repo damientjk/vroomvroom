@@ -14,7 +14,7 @@ Based on `data/DISP-002.json`. Top-level keys:
 - `app_events`: list of `{timestamp, event_type, details}`
 - `cancellation_policy` (no-show cases)
 
-Route deviation cases will also need planned route + fare breakdown (TBD with Person C).
+Route deviation cases will also need planned route + fare breakdown (TBD with Marcus).
 
 **Never pass the dataset's "expected ruling" or evidence summary to the agents.**
 
@@ -26,14 +26,20 @@ Route deviation cases will also need planned route + fare breakdown (TBD with Pe
   "tool": "no_show_check",
   "facts": {
     "driver_distance_from_pickup_m": 0,
+    "arrived": true,
     "arrived_minutes_vs_scheduled": -2,
     "total_wait_min": 8,
+    "free_wait_expired": true,
+    "no_show_threshold_reached": true,
     "contact_attempts": 5,
-    "rider_replies": 0
+    "rider_replies": 0,
+    "missing_evidence": []
   },
   "flags": []
 }
 ```
+
+`route_deviation()` output must also include `"traffic_justified": false` (bool) — determined by the LLM from slow-speed segments and driver chat messages, then used by the code refund formula.
 
 ## 3. Advocate brief
 
@@ -43,7 +49,7 @@ Route deviation cases will also need planned route + fare breakdown (TBD with Pe
   "side": "rider | driver",
   "position": "one-sentence ask",
   "arguments": [
-    { "point": "...", "evidence_refs": ["no_show_check.total_wait_min"], "clauses": ["NS-2.1"] }
+    { "point": "...", "evidence_refs": ["no_show_check.total_wait_min"], "clauses": ["NS-1.6"] }
   ],
   "weaknesses_acknowledged": ["..."]
 }
@@ -59,9 +65,10 @@ Same schema and length cap for both sides.
   "outcome": "refund | compensation | no_action | charge_upheld | charge_reversed | escalate",
   "amount_sgd": 0.0,
   "confidence": 0.92,
-  "clauses_cited": ["NS-2.1"],
+  "clauses_cited": ["NS-1.6"],
   "explanation_rider": "plain language",
   "explanation_driver": "plain language",
+  "conduct_flag": false,
   "escalated": false,
   "escalation_reason": null
 }

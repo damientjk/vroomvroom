@@ -21,7 +21,17 @@ def test_schemas_md_examples_validate():
         {
             "dispute_id": "DISP-002",
             "tool": "no_show_check",
-            "facts": {"total_wait_min": 8, "contact_attempts": 5},
+            "facts": {
+                "driver_distance_from_pickup_m": 0,
+                "arrived": True,
+                "arrived_minutes_vs_scheduled": -2,
+                "total_wait_min": 8,
+                "free_wait_expired": True,
+                "no_show_threshold_reached": True,
+                "contact_attempts": 5,
+                "rider_replies": 0,
+                "missing_evidence": [],
+            },
             "flags": [],
         }
     )
@@ -31,7 +41,7 @@ def test_schemas_md_examples_validate():
             "side": "driver",
             "position": "Uphold the fee.",
             "arguments": [
-                {"point": "Waited 8 min.", "evidence_refs": ["no_show_check.total_wait_min"], "clauses": ["NS-2.1"]}
+                {"point": "Waited 8 min.", "evidence_refs": ["no_show_check.total_wait_min"], "clauses": ["NS-1.6"]}
             ],
         }
     )
@@ -41,9 +51,10 @@ def test_schemas_md_examples_validate():
             "outcome": "charge_upheld",
             "amount_sgd": 0.0,
             "confidence": 0.92,
-            "clauses_cited": ["NS-2.1"],
+            "clauses_cited": ["NS-1.6"],
             "explanation_rider": "...",
             "explanation_driver": "...",
+            "conduct_flag": False,
         }
     )
 
@@ -57,6 +68,7 @@ def test_ruling_rejects_bad_confidence_and_unexplained_escalation():
         "clauses_cited": [],
         "explanation_rider": "",
         "explanation_driver": "",
+        "conduct_flag": False,
         "escalated": True,
     }
     with pytest.raises(ValidationError):

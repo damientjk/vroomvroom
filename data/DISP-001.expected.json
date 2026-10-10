@@ -1,0 +1,80 @@
+{
+  "data_label": "SYNTHETIC_TEST_DATA",
+  "dispute_id": "DISP-001",
+  "note": "This file is a TEST FIXTURE, not agent input. The expected outcome and reasoning below must NEVER be passed to the AI agents. Only data/DISP-001.json (which contains no expected verdict) is sent to the agents.",
+  "expected_outcome": {
+    "outcome": "refund",
+    "amount_sgd": 1.07,
+    "clauses_cited": ["RD-2.6"],
+    "conduct_flag": false,
+    "confidence": 0.90,
+    "escalated": false,
+    "escalation_reason": null
+  },
+  "expected_evidence_facts": {
+    "route_deviation": {
+      "baseline_distance_km": 3.6817,
+      "actual_distance_km": 5.2050,
+      "deviation_pct": 41.4,
+      "review_triggered": true,
+      "rider_route_messages": [],
+      "rider_requested_detour": false,
+      "trip_duration_min": 12.0,
+      "avg_speed_kmh": 26.0,
+      "traffic_justified": false,
+      "fare_type": "metered",
+      "per_km_rate_sgd": 0.70
+    },
+    "fare_validate": {
+      "fare_type": "metered",
+      "actual_fare_sgd": 7.14,
+      "per_km_rate_sgd": 0.70,
+      "surge_applied": false
+    }
+  },
+  "gate_trace": [
+    {
+      "step": 1,
+      "clause": "RD-2.2",
+      "check": "deviation_pct >= 20.0",
+      "facts": "deviation_pct = 41.4",
+      "result": "review_triggered = true"
+    },
+    {
+      "step": 2,
+      "clause": "RD-2.3",
+      "check": "rider_requested_detour",
+      "facts": "rider_route_messages = [] (rider asked 'are we going the right way' but did not request a specific route)",
+      "result": "rider_requested_detour = false"
+    },
+    {
+      "step": 3,
+      "clause": "RD-2.5",
+      "check": "fare_type == fixed?",
+      "facts": "fare_type = metered (RydeTAXI)",
+      "result": "not fixed → proceed to RD-2.6"
+    },
+    {
+      "step": 4,
+      "clause": "RD-2.4",
+      "check": "traffic_justified",
+      "facts": "no driver messages about traffic, speeds 30-45 km/h (normal urban), no slow segments",
+      "result": "traffic_justified = false"
+    },
+    {
+      "step": 5,
+      "clause": "RD-2.6",
+      "check": "metered + deviation >= 20% + no detour + no traffic",
+      "facts": "all conditions met",
+      "result": "compute refund"
+    },
+    {
+      "step": 6,
+      "clause": "RD-2.6 formula",
+      "check": "excess_km * per_km_rate, capped at actual_fare",
+      "facts": "excess_km = 5.2050 - 3.6817 = 1.5233; excess_fare = 1.5233 * 0.70 = 1.07; refund = min(1.07, 7.14) = 1.07",
+      "result": "refund = $1.07"
+    }
+  ],
+  "reasoning": "The driver took a route 41.4% longer than the baseline (5.21 km vs 3.68 km). The rider did not request a detour (the rider's message 'are we going the right way?' is a question, not a route request). The fare is metered (RydeTAXI) with a per-km rate of $0.70. The excess distance of 1.52 km resulted in an excess fare of $1.07, which is the verified refund amount. No traffic justification was evidenced (normal speeds, no driver messages about traffic). The refund is capped at the actual fare ($7.14), so the full $1.07 excess applies."
+}
