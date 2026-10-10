@@ -259,7 +259,7 @@ SAFETY_KEYWORDS = [
 | **Output fields** | `rider_route_messages: list`, `rider_requested_detour: bool` |
 | **Detour found →** | `("no_action", 0.00, ["RD-2.3"], False)` |
 | **No detour →** | Proceed to RD-2.4 |
-| **Note** | `contains_route_content()` is a keyword filter (e.g. "route", "detour", "go via", "take", "highway"). The LLM makes the final intent determination. |
+| **Note** | `contains_route_content()` is a keyword filter (e.g. "route", "detour", "go via", "take", "highway"). It surfaces **candidate** messages only — it does NOT determine intent. The LLM makes the final intent determination. The keyword filter cannot distinguish a request from a complaint: "please take the expressway" (request → `rider_requested_detour=true`) and "why are you taking this route??" (complaint → `rider_requested_detour=false`) both match the filter. TC-05 tests this: rider says "Are we going the right way?" — keyword match fires, but Judge must rule `rider_requested_detour=false` (question, not a request). |
 
 #### RD-2.4 — Traffic and Road Conditions
 
@@ -297,6 +297,17 @@ SAFETY_KEYWORDS = [
 | **Output** | `("refund", refund_sgd, ["RD-2.6"], False)` |
 | **Missing `per_km_rate_sgd`** | Escalate (missing evidence) |
 
+#### RD-2.7 — Missing Evidence Handling
+
+| | |
+|---|---|
+| **Classification** | PROPOSED (mirrors NS-1.8) |
+| **Critical fields** | `["gps_telemetry", "fare_breakdown", "per_km_rate_sgd"]` (conditional) |
+| **Condition** | `gps_telemetry` absent or fewer than 2 in-trip points (cannot compute actual distance); OR `fare_breakdown` absent (cannot determine fare type); OR `per_km_rate_sgd` absent when fare type is metered/distance_time and RD-2.6 would fire (deviation ≥ 20%, no rider request, no traffic justification) |
+| **Output** | `("escalate", 0.00, ["RD-2.7", "E-1.5"], False)` with `escalated=True`, `escalation_reason="missing evidence for route deviation: [...]"` |
+| **Output field** | `missing_evidence: list[str]` — list of missing field names |
+| **Gate position** | Gate 0 — checked before RD-2.2 (deviation threshold). Same pattern as NS-1.8 in no-show chain. |
+
 ### `route_deviation()` output (full)
 
 ```json
@@ -314,7 +325,8 @@ SAFETY_KEYWORDS = [
     "avg_speed_kmh": 25.3,
     "traffic_justified": false,
     "fare_type": "fixed",
-    "per_km_rate_sgd": null
+    "per_km_rate_sgd": null,
+    "missing_evidence": []
   },
   "flags": []
 }
@@ -444,6 +456,10 @@ def compute_no_show_outcome(facts, constants):
 
 ```python
 def compute_route_deviation_outcome(facts, constants):
+    # Gate 0: Missing evidence → escalate
+    if facts["missing_evidence"]:
+        return ("escalate", 0.00, ["RD-2.7", "E-1.5"], False)
+
     # Gate 1: Deviation below review threshold?
     if not facts["review_triggered"]:
         return ("no_action", 0.00, ["RD-2.2"], False)
@@ -578,6 +594,9 @@ One per clause edge, designed to catch off-by-one and threshold errors:
 | B14 | RD-2.6 | Metered fare, unjustified, refund capped | `excess_fare = 15.0`, `actual_fare = 10.0` | `refund = 10.0` (capped) |
 | B15 | S-1.1 | Speeding exactly at threshold | `speed_kmh = 90` | Not triggered (`> 90`, not `>= 90`) |
 | B16 | S-1.1 | Speeding just over threshold | `speed_kmh = 91` | Safety incident → escalate |
+| B17 | RD-2.7 | GPS telemetry has only 1 in-trip point | `len(in_trip_points) = 1` | `missing_evidence = ["gps_telemetry"]` → escalate |
+| B18 | RD-2.7 | Fare breakdown absent for route_deviation | `fare_breakdown` key absent | `missing_evidence = ["fare_breakdown"]` → escalate |
+| B19 | RD-2.7 | Per-km rate absent when RD-2.6 would fire | `per_km_rate_sgd = None`, metered fare, deviation ≥ 20% | `missing_evidence = ["per_km_rate_sgd"]` → escalate |
 
 ---
 
@@ -587,15 +606,16 @@ What happens when each input field is absent or contradictory:
 
 | Missing field | Clause affected | Behavior | Outcome |
 |---|---|---|---|
-| `gps_telemetry` (entire key absent) | NS-1.1, RD-2.1, S-1.1 | Cannot verify arrival, compute route, or check speeding | Add to `missing_evidence` → escalate |
+| `gps_telemetry` (entire key absent) | NS-1.1, RD-2.1, RD-2.7, S-1.1 | Cannot verify arrival, compute route, or check speeding | Add to `missing_evidence` → escalate (NS-1.8 for no-show, RD-2.7 for route deviation) |
 | `gps_telemetry` has no `arrived` status point | NS-1.1 | Cannot find driver arrival GPS | `arrived = False`, add `"gps_arrived_point"` to `missing_evidence` |
+| `gps_telemetry` has fewer than 2 in-trip points | RD-2.1, RD-2.7 | Cannot compute actual distance for route deviation | Add `"gps_telemetry"` to `missing_evidence` → escalate (RD-2.7) |
 | `driver_arrival_time` absent | NS-1.2 | Derive from first `arrived` GPS timestamp | If GPS also absent → add to `missing_evidence` → escalate |
 | `cancellation_time` absent | NS-1.3, NS-1.4 | Cannot compute wait duration | Add to `missing_evidence` → escalate |
 | `chat_logs` (entire key absent) | NS-1.5, RD-2.3, S-1.1 | Cannot count contact, detect detour, scan for safety keywords | Add to `missing_evidence` → escalate |
 | `chat_logs` is empty list `[]` | NS-1.5 | `contact_attempts = 0`, `rider_replies = 0` | `0 < 2` → charge_reversed (NOT missing evidence — empty is valid) |
 | `cancellation_policy` block absent | NS-1.3, NS-1.4, NS-1.6 | Fall back to constants module defaults | OK — constants module has HACKATHON_2026 values |
 | `app_events` absent | NS-1.1, NS-1.5 | Cross-verification unavailable | GPS + chat_logs are primary; app_events absence is a flag, not escalation |
-| `trip_data.fare_breakdown` absent | RD-2.5, RD-2.6 | Cannot determine fare type | For route_deviation disputes: add `"fare_breakdown"` to `missing_evidence` → escalate |
+| `trip_data.fare_breakdown` absent | RD-2.5, RD-2.6, RD-2.7 | Cannot determine fare type | For route_deviation disputes: add `"fare_breakdown"` to `missing_evidence` → escalate (RD-2.7) |
 | GPS and app_events contradict on arrival | NS-1.1 | GPS says 0m, app_events has no `driver_arrived` | `arrived = True` (GPS is sufficient), add `"app_event_driver_arrived"` to `missing_evidence` as flag |
 | `wait_timer_expired` app event time ≠ computed expiry | NS-1.3 | Timestamps differ by > 1 min | Add `"wait_timer_mismatch"` to `missing_evidence` as flag |
 

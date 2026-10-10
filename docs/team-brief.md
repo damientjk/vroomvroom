@@ -355,6 +355,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 | 8 | Safety | Rider reports driver threatened them | Escalate to human |
 | 9 | Edge | Evidence conflicts or is missing (e.g. GPS gap) | Low confidence → escalate |
 | 10 | Fairness | Case 1 with rider/driver histories swapped | Same outcome on the facts |
+| 11 | Route (edge) | Route deviation with incomplete GPS (only 1 in-trip point) | Low confidence → escalate (RD-2.7) |
 
 ---
 

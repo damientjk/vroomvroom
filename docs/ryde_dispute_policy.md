@@ -607,7 +607,12 @@ warrant a conduct flag or partial refund in specific cases) from a
   - `chat_logs` with rider messages containing route-related content.
   - `app_events` with stop additions or route changes.
   - The LLM agents interpret whether a message constitutes a detour request
-    or agreement.
+    or agreement. The keyword filter (`contains_route_content()`) surfaces
+    candidates only — it cannot distinguish a request ("please take the
+    expressway") from a complaint ("why are you taking this route??"). The
+    Judge LLM makes the final intent determination. TC-05 tests this: the
+    rider's message "Are we going the right way?" matches the keyword filter
+    but is a question, not a route request.
 
 - **Expected outcome:**
   - If a rider-requested detour is evidenced → outcome `no_action`,
@@ -760,6 +765,54 @@ warrant a conduct flag or partial refund in specific cases) from a
       refund_sgd = min(excess_fare_sgd, actual_fare_sgd)
       outcome = "refund"
       amount_sgd = refund_sgd
+  ```
+
+### RD-2.7 — Missing Evidence Handling
+
+- **Rule:** If any critical evidence required to evaluate a route-deviation
+  dispute is missing or insufficient, the case must be escalated to human
+  review. No automatic ruling (for or against either party) may be issued.
+
+  Critical evidence fields for route deviation:
+  1. `gps_telemetry` — must have at least 2 in-trip points to compute
+     actual distance. If absent or with fewer than 2 in-trip points,
+     deviation cannot be computed.
+  2. `trip_data.fare_breakdown` — must be present to determine fare type
+     (fixed, metered, distance_time). If absent, fare type cannot be
+     determined.
+  3. `fare_breakdown.per_km_rate_sgd` — must be present when fare type is
+     metered or distance_time and RD-2.6 would fire (deviation ≥ 20%, no
+     rider request, no traffic justification). If absent, refund cannot be
+     computed.
+
+- **Classification:** `PROPOSED` (mirrors NS-1.8 pattern for no-show).
+
+- **Evidence required:**
+  - All inputs required by RD-2.1 through RD-2.6, verified for completeness.
+
+- **Expected outcome:**
+  - Outcome: `escalate`.
+  - `amount_sgd`: 0.00.
+  - `cited_policy_clauses`: `["RD-2.7", "E-1.5"]`.
+  - `confidence`: < 0.70 (below auto-ruling threshold).
+  - `escalated`: true.
+  - `escalation_reason`: "missing evidence for route deviation: [fields]".
+
+- **Source:** `PROPOSED`.
+
+- **Python computation:**
+  ```python
+  missing = []
+  if len([p for p in gps_telemetry if p.status == "in_trip"]) < 2:
+      missing.append("gps_telemetry")
+  if fare_breakdown is None:
+      missing.append("fare_breakdown")
+  elif fare_type in ("metered", "distance_time") and per_km_rate_sgd is None \
+       and deviation_pct >= 20 and not rider_requested_detour \
+       and not traffic_justified:
+      missing.append("per_km_rate_sgd")
+  if missing:
+      return ("escalate", 0.00, ["RD-2.7", "E-1.5"], False)
   ```
 
 ---
@@ -1041,15 +1094,16 @@ evidence in any dispute.
 
 ### Route Deviation — Decision Matrix (HACKATHON_2026)
 
-| Deviation ≥ 20%? (RD-2.2) | Rider requested detour? (RD-2.3) | Traffic justified? (RD-2.4) | Fare type (RD-2.5) | Outcome | Amount (S$) |
-|---|---|---|---|---|---|
-| No | — | — | — | `no_action` | 0.00 |
-| Yes | Yes | — | — | `no_action` | 0.00 |
-| Yes | No | Yes | Fixed | `no_action` | 0.00 |
-| Yes | No | Yes | Metered | `no_action` | 0.00 |
-| Yes | No | No | Fixed | `no_action` + conduct flag | 0.00 |
-| Yes | No | No | Metered | `refund` | computed excess |
-| Yes | No | No | Distance/time | `refund` | computed excess |
+| Deviation ≥ 20%? (RD-2.2) | Rider requested detour? (RD-2.3) | Traffic justified? (RD-2.4) | Fare type (RD-2.5) | Missing evidence? (RD-2.7) | Outcome | Amount (S$) |
+|---|---|---|---|---|---|---|
+| No | — | — | — | No | `no_action` | 0.00 |
+| Yes | Yes | — | — | No | `no_action` | 0.00 |
+| Yes | No | Yes | Fixed | No | `no_action` | 0.00 |
+| Yes | No | Yes | Metered | No | `no_action` | 0.00 |
+| Yes | No | No | Fixed | No | `no_action` + conduct flag | 0.00 |
+| Yes | No | No | Metered | No | `refund` | computed excess |
+| Yes | No | No | Distance/time | No | `refund` | computed excess |
+| — | — | — | — | Yes | `escalate` | 0.00 |
 
 ### Safety — Decision Matrix
 
@@ -1191,6 +1245,10 @@ def compute_no_show_outcome(facts, constants):
 
 def compute_route_deviation_outcome(facts, constants):
     """Returns (outcome, amount_sgd, clauses_cited, conduct_flag)."""
+    # Gate 0: Missing evidence → escalate
+    if facts.missing_evidence:
+        return ("escalate", 0.00, ["RD-2.7", "E-1.5"], False)
+
     if not facts.review_triggered:
         return ("no_action", 0.00, ["RD-2.2"], False)
 

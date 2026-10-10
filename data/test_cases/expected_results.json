@@ -1,6 +1,6 @@
 {
   "note": "This file is a TEST FIXTURE, not agent input. The expected outcomes and reasoning below must NEVER be passed to the AI agents. Only the TC-*.json input files (which contain no expected verdicts) are sent to the agents.",
-  "suite_description": "10-case evaluation suite for RydeResolve multi-agent dispute resolution system. Each case maps to a scenario specified in docs/team-brief.md under 'Test cases to write (Marcus)'.",
+  "suite_description": "11-case evaluation suite for RydeResolve multi-agent dispute resolution system. Each case maps to a scenario specified in docs/team-brief.md under 'Test cases to write (Marcus)'.",
   "profile": "HACKATHON_2026",
   "test_cases": [
     {
@@ -75,7 +75,7 @@
       "description": "Route 10% longer — no refund.",
       "expected_verdict": "no_action",
       "expected_amount_sgd": null,
-      "cited_policy_clauses": ["RD-2.1"],
+      "cited_policy_clauses": ["RD-2.2"],
       "reason": "Actual distance 4.13 km vs baseline 3.6817 km = 12.2% deviation. This is below the 20% threshold. RD-2.2 does not trigger (deviation < 20%). No review is initiated. Additionally, fare is fixed (RydeX), so even if reviewed, no refund would apply (RD-2.5: fixed fare = conduct_flag only). No action taken.",
       "escalation_required": false,
       "expected_confidence": 0.91
@@ -114,6 +114,18 @@
       "reason": "This case uses identical trip facts as TC-01 (DISP-002 original) but swaps rider and driver profiles: rider now has excellent history (900 days, 3201 trips, 4.9 rating, 0 fraud flags) and driver has poor history (210 days, 34 trips, 3.9 rating, 1 fraud flag). Despite the profile inversion, the fact-based evaluation produces the same outcome: driver arrived at 08:43 (NS-1.1 pass), waited 8 min >= 5 min (NS-1.3 pass), cancelled at 8 min >= 8 min threshold (NS-1.4 pass), made 5 contact attempts >= 3 (NS-1.5 pass), 0 rider replies (NS-1.6 pass). All fact gates pass. E-1.5: profiles inform confidence but do not override fact-based verdict. Charge upheld. This tests that the system evaluates on evidence, not reputation.",
       "escalation_required": false,
       "expected_confidence": 0.89
+    },
+    {
+      "case_id": "TC-11",
+      "dispute_type": "route_deviation",
+      "description": "Route deviation with incomplete GPS — low confidence and human escalation.",
+      "expected_verdict": "escalate",
+      "expected_amount_sgd": null,
+      "cited_policy_clauses": ["RD-2.7", "E-1.5"],
+      "reason": "GPS telemetry has only 3 data points: trip_started, one in_trip (at 14:35), and trip_completed. Only 1 in-trip point means actual distance cannot be computed (RD-2.1 requires >= 2 consecutive in-trip points). RD-2.7 fires: missing GPS evidence for route deviation. The fare_breakdown is present (fixed, RydeX), but without actual distance the deviation percentage cannot be calculated. E-1.5: no adverse inference from missing data — escalate, do not auto-rule against either party. Confidence below 0.70 threshold, escalate to human review.",
+      "escalation_required": true,
+      "escalation_reason": "GPS telemetry has only 1 in-trip point (3 total). Cannot compute actual distance or deviation percentage. Missing evidence for route deviation evaluation. Confidence below auto-ruling threshold.",
+      "expected_confidence": 0.55
     }
   ]
 }

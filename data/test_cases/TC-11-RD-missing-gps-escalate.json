@@ -1,14 +1,14 @@
 {
   "data_label": "TEST_CASE",
-  "test_case_id": "TC-07",
-  "test_case_description": "Route 10% longer — no refund. Deviation is 12% (under 20% threshold). RD-2.2 fails (no review triggered). Fixed fare (RydeX), so even if reviewed, no refund. No action.",
+  "test_case_id": "TC-11",
+  "test_case_description": "Route deviation with incomplete GPS — low confidence and human escalation. GPS telemetry has only 3 points (trip_started, one in_trip, trip_completed). Cannot compute actual distance. RD-2.7 fires (missing GPS evidence for route deviation), escalate.",
   "dispute_ticket": {
-    "dispute_id": "DISP-001-T7",
-    "trip_id": "TRIP-2026-10012-T7",
+    "dispute_id": "DISP-001-T11",
+    "trip_id": "TRIP-2026-10012-T11",
     "filed_by": "rider",
     "dispute_type": "route_deviation",
-    "description": "I think the driver took a slightly longer route to VivoCity. The fare was $12.00 but I usually pay around $10. I want a refund for the difference.",
-    "filed_at": "2026-09-20T15:00:00+08:00",
+    "description": "The driver took a much longer route to VivoCity. I've taken this trip many times and it's never been more than $12. This time the driver went via Alexandra Road and I think he took a detour. The fare was $12.00 but it should have been around $10.",
+    "filed_at": "2026-09-20T15:05:00+08:00",
     "status": "open"
   },
   "rider_profile": {
@@ -43,7 +43,7 @@
     "service_type": "RydeX"
   },
   "trip_data": {
-    "trip_id": "TRIP-2026-10012-T7",
+    "trip_id": "TRIP-2026-10012-T11",
     "rider_id": "R-4521",
     "driver_id": "D-3107",
     "pickup_location": {
@@ -98,38 +98,10 @@
       "status": "trip_started"
     },
     {
-      "timestamp": "2026-09-20T14:31:30+08:00",
-      "lat": 1.2795,
-      "lng": 103.8440,
-      "speed_kmh": 34,
-      "status": "in_trip"
-    },
-    {
-      "timestamp": "2026-09-20T14:33:00+08:00",
-      "lat": 1.2740,
-      "lng": 103.8440,
-      "speed_kmh": 35,
-      "status": "in_trip"
-    },
-    {
-      "timestamp": "2026-09-20T14:34:30+08:00",
-      "lat": 1.2700,
-      "lng": 103.8380,
-      "speed_kmh": 36,
-      "status": "in_trip"
-    },
-    {
-      "timestamp": "2026-09-20T14:36:00+08:00",
-      "lat": 1.2680,
-      "lng": 103.8310,
+      "timestamp": "2026-09-20T14:35:00+08:00",
+      "lat": 1.2730,
+      "lng": 103.8250,
       "speed_kmh": 32,
-      "status": "in_trip"
-    },
-    {
-      "timestamp": "2026-09-20T14:37:30+08:00",
-      "lat": 1.2660,
-      "lng": 103.8260,
-      "speed_kmh": 28,
       "status": "in_trip"
     },
     {
@@ -164,7 +136,7 @@
     {
       "timestamp": "2026-09-20T14:20:00+08:00",
       "event_type": "booking_confirmed",
-      "details": "Rider R-4521 booked trip TRIP-2026-10012-T7 from Tiong Bahru Plaza to VivoCity. Scheduled pickup 14:30. Service type: RydeX (fixed fare)."
+      "details": "Rider R-4521 booked trip TRIP-2026-10012-T11 from Tiong Bahru Plaza to VivoCity. Scheduled pickup 14:30. Service type: RydeX (fixed fare)."
     },
     {
       "timestamp": "2026-09-20T14:20:15+08:00",
@@ -202,9 +174,9 @@
       "details": "Fixed fare of $12.00 charged to rider payment method (credit_card). No surge applied."
     },
     {
-      "timestamp": "2026-09-20T15:00:00+08:00",
+      "timestamp": "2026-09-20T15:05:00+08:00",
       "event_type": "dispute_filed",
-      "details": "Rider filed route_deviation dispute. Alleges driver took slightly longer route. Actual distance 4.13 km vs baseline 3.68 km (12% deviation)."
+      "details": "Rider filed route_deviation dispute. Alleges driver took longer route via Alexandra Road. GPS telemetry incomplete — only 1 in-trip point recorded between pickup and dropoff. Cannot verify actual route."
     }
   ]
 }
