@@ -18,9 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import streamlit as st
 
-from state import load_mock_ruling, load_mock_agent_log, load_mock_evidence, stream_agent_log
+from state import (
+    DEFAULT_DEMO_MODE,
+    BackendError,
+    load_mock_agent_log,
+    load_mock_evidence,
+    load_mock_ruling,
+    stream_agent_log,
+)
 from components.dispute_form import render_dispute_form
-from components.courtroom_log import render_courtroom_log, render_message, _message_html
+from components.courtroom_log import render_courtroom_log, _message_html
 from components.ruling_cards import render_ruling_card, render_evidence_card
 
 st.set_page_config(
@@ -35,6 +42,10 @@ def main() -> None:
     st.caption("Multi-Agent Autonomous Dispute Resolution")
 
     # --- Session state init ---
+    if "demo_mode" not in st.session_state:
+        st.session_state.demo_mode = DEFAULT_DEMO_MODE
+    if "error" not in st.session_state:
+        st.session_state.error = None
     if "agent_log" not in st.session_state:
         st.session_state.agent_log = []
     if "ruling" not in st.session_state:
@@ -44,22 +55,28 @@ def main() -> None:
     if "resolving" not in st.session_state:
         st.session_state.resolving = False
 
-    # --- Step 1: Dispute filing form ---
-    dispute_payload = render_dispute_form()
+    st.sidebar.toggle("Demo mode (simulated data)", key="demo_mode")
+    if st.session_state.get("demo_mode"):
+        st.info("Demo mode: agent messages, evidence and rulings are simulated, not live.")
 
-    col_resolve, col_mock, col_clear = st.columns([1, 1, 1])
-    with col_resolve:
-        if st.button("Resolve Dispute", type="primary", disabled=st.session_state.resolving):
-            st.session_state.resolving = True
-            st.session_state.agent_log = []
-            st.rerun()
+    # --- Step 1: Dispute filing form (submitting starts the resolution) ---
+    submitted_payload = render_dispute_form()
+    if submitted_payload is not None:
+        st.session_state.payload = submitted_payload
+        st.session_state.resolving = True
+        st.session_state.agent_log = []
+        st.session_state.evidence = []
+        st.session_state.ruling = None
+        st.rerun()
+
+    col_mock, col_clear, _ = st.columns([1, 1, 2])
     with col_mock:
-        if st.button("Load Mock Data"):
+        if st.button("Load Mock Data", disabled=st.session_state.resolving):
             st.session_state.agent_log = load_mock_agent_log()
             st.session_state.evidence = load_mock_evidence()
             st.session_state.ruling = load_mock_ruling()
     with col_clear:
-        if st.button("Clear"):
+        if st.button("Clear", disabled=st.session_state.resolving):
             st.session_state.agent_log = []
             st.session_state.evidence = []
             st.session_state.ruling = None
@@ -73,16 +90,33 @@ def main() -> None:
         status_placeholder = st.empty()
 
         accumulated_html = ""
+        failed = False
         with status_placeholder.status("Resolving dispute...", expanded=True) as status:
-            for msg in stream_agent_log(dispute_payload or {}):
-                st.session_state.agent_log.append(msg)
-                accumulated_html += _message_html(msg)
-                courtroom_placeholder.markdown(accumulated_html, unsafe_allow_html=True)
-            st.session_state.evidence = load_mock_evidence()  # TODO: use real evidence from stream
-            st.session_state.ruling = load_mock_ruling()  # TODO: use real ruling from stream
-            status.update(label="Resolution complete", state="complete")
+            try:
+                for msg in stream_agent_log(
+                    st.session_state.get("payload") or {}, demo_mode=st.session_state.demo_mode
+                ):
+                    st.session_state.agent_log.append(msg)
+                    accumulated_html += _message_html(msg)
+                    courtroom_placeholder.markdown(accumulated_html, unsafe_allow_html=True)
+                # TODO: use real evidence/ruling from the stream once the contract is agreed
+                st.session_state.evidence = load_mock_evidence()
+                st.session_state.ruling = load_mock_ruling()
+                status.update(label="Resolution complete", state="complete")
+            except BackendError as e:
+                failed = True
+                st.session_state.error = str(e)
+                status.update(label="Resolution failed", state="error")
         st.session_state.resolving = False
+        if not failed:
+            st.session_state.error = None
         st.rerun()
+
+    if st.session_state.error:
+        st.error(
+            f"{st.session_state.error} Check that the backend is running, "
+            "or switch on demo mode in the sidebar."
+        )
 
     # --- Step 3: Courtroom log ---
     if st.session_state.agent_log:

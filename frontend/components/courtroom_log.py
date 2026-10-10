@@ -1,6 +1,7 @@
 """Courtroom log component — displays agent messages as they arrive."""
 from __future__ import annotations
 
+import html
 from typing import Any
 
 import streamlit as st
@@ -24,7 +25,7 @@ def _message_html(msg: dict[str, Any]) -> str:
     """Build the HTML for a single agent message bubble."""
     agent = msg.get("agent", "system")
     msg_type = msg.get("type", "evidence")
-    content = msg.get("content", "")
+    content = html.escape(str(msg.get("content", "")))
     style = AGENT_STYLES.get(agent, AGENT_STYLES["system"])
     type_icon = TYPE_ICONS.get(msg_type, "•")
 
