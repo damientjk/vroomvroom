@@ -5,3 +5,4 @@ langgraph>=1.2,<2
 python-dotenv
 httpx
 pytest
+pytest-asyncio
