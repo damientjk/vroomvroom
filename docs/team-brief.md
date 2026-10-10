@@ -53,6 +53,7 @@ Evidence tools (plain code)
   - no_show_check()     → driver distance from pickup, wait time, contact attempts
   - fare_validate()     → surge / promo / breakdown checks
   - history_lookup()    → dispute history, ratings, account age
+  - safety_check()      → threat/harassment keywords, speeding (any safety hit → human review)
      │
      ├──────────────┬──────────────┐
      ▼              ▼              │
@@ -261,12 +262,12 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 ### Sun 11 Oct: Integration day ⚠️
 
 **Damien**
-- [ ] Wire `agents/pipeline.py` into LangGraph (evidence → advocates in parallel → Judge → escalation branch)
-- [ ] Replace the stub in `POST /api/disputes/resolve` with the real agent flow (same stream format)
-- [ ] Trim policy text sent to agents (drop "Python computation", Source and Classification blocks): prompts are ~7k tokens per advocate now
-- [ ] Judge option to see the driver's brief first, for Marcus's advocate-order fairness test
-- [ ] Tighten advocate prompt: quote fact values exactly (rider advocate misread `total_wait_min` in the DISP-002 run)
-- [ ] `check_safety()` (S-1.1) before the outcome step, so TC-08 escalates instead of being upheld
+- [x] Wire the agents into LangGraph (`agents/graph.py`): evidence → advocates in parallel → Judge → human review or issued ruling. `run_case.py` uses the same graph
+- [x] Replace the stub in `POST /api/disputes/resolve` with the real agent flow (same stream format). Stub kept behind `USE_STUB_AGENTS=true` for UI work without credits / demo fallback
+- [x] Trim policy text sent to agents (~36% smaller; Python, Source, Classification, Discrepancy blocks and test-case references removed)
+- [x] Judge option to see the driver's brief first (`--driver-first` in `run_case.py`, `"driver_first": true` in the API), for the advocate-order fairness test
+- [x] Tighten advocate prompt: quote fact values exactly; dispute description is the filer's claim, not evidence
+- [x] `safety_check()` (S-1.1): any hit escalates to human review (`S-1.1, S-1.2`, $0). TC-08 now escalates (verified live). Keywords match at word start: the handoff's substring match flagged 12 of 13 cases ("hit" in "White Toyota")
 - [ ] `fare_validate()` if time allows
 - [ ] Pair with Alpha to connect frontend and backend
 
@@ -275,8 +276,8 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 - [ ] Handle loading and error states (LLM slow, API fails)
 
 **Marcus**
-- [ ] Remove test-case references from the policy doc (RD-2.3 tells the Judge TC-05's answer, and the agents read the policy)
-- [ ] Run every test case through the integrated system
+- [x] ~~Remove test-case references from the policy doc~~ No longer needed: the backend strips them before the agents see the policy
+- [ ] Run every test case through the integrated system: `python3 scripts/run_case.py TC-05` from `backend/` (add `--driver-first` for the order-swap fairness test). Run live (`USE_MOCK_LLM=false`); prompts changed on 11 Oct, so old cached runs no longer replay
 - [ ] Log each result: expected vs actual ruling, time taken, any bugs → shared bug list for Damien & Alpha
 
 **API contract (agreed with Alpha 10 Oct)**
@@ -288,6 +289,9 @@ Each day lists what each person does, what they hand to someone else, and a **"d
   - `{"type": "ruling_data", "data": Ruling}`, last
   - `{"type": "error", "content": "..."}` if something fails after streaming starts, then the stream ends
 - `history_lookup` facts keep their nested `facts.rider` / `facts.driver` shape.
+- **Real flow (11 Oct):** evidence lines arrive at once (`history_lookup`, `safety_check`, then `no_show_check` or `route_deviation`); then ~15–30 s of silence while the advocates run; each advocate's position + arguments (`type: argument`) and its `brief_data` arrive together as it finishes; then the Judge's `ruling` line and `ruling_data`; escalated cases end with a `system` line "Routed to the human review queue."
+- Optional request field `"driver_first": true` makes the Judge read the driver's brief first (fairness test). The UI doesn't need it.
+- `USE_STUB_AGENTS=true` on the backend replays mocked agent messages instead of calling ADP.
 
 **Done when:** a dispute can be filed in the UI and a real ruling appears, with the agent conversation visible live. **This is the most important milestone. If it slips, cut stretch goals, not this.**
 
@@ -296,7 +300,8 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 ### Mon 12 Oct: Stretch goals + fixes
 
 **Damien**
-- [ ] Escalation: confidence below threshold, or any safety keyword/category → human review queue
+- [x] Escalation: confidence below 0.70 or any safety hit → `escalate` and the graph's `human_review` branch (done 11 Oct)
+- [ ] Human review queue backend: store escalated rulings and expose them (list, approve/override) for Alpha's page
 - [ ] SLA routing: safety and high-value disputes prioritised
 - [ ] Fix bugs from Marcus's list
 
