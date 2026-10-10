@@ -18,10 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import streamlit as st
 
-from state import load_mock_ruling, load_mock_agent_log, stream_agent_log
+from state import load_mock_ruling, load_mock_agent_log, load_mock_evidence, stream_agent_log
 from components.dispute_form import render_dispute_form
 from components.courtroom_log import render_courtroom_log
-from components.ruling_cards import render_ruling_card
+from components.ruling_cards import render_ruling_card, render_evidence_card
 
 st.set_page_config(
     page_title="Ryde Track — Dispute Resolution",
@@ -39,6 +39,8 @@ def main() -> None:
         st.session_state.agent_log = []
     if "ruling" not in st.session_state:
         st.session_state.ruling = None
+    if "evidence" not in st.session_state:
+        st.session_state.evidence = []
     if "resolving" not in st.session_state:
         st.session_state.resolving = False
 
@@ -54,10 +56,12 @@ def main() -> None:
     with col_mock:
         if st.button("Load Mock Data"):
             st.session_state.agent_log = load_mock_agent_log()
+            st.session_state.evidence = load_mock_evidence()
             st.session_state.ruling = load_mock_ruling()
     with col_clear:
         if st.button("Clear"):
             st.session_state.agent_log = []
+            st.session_state.evidence = []
             st.session_state.ruling = None
 
     # --- Step 2: Resolve (stream agents) ---
@@ -65,6 +69,7 @@ def main() -> None:
         with st.status("Resolving dispute...", expanded=True) as status:
             for msg in stream_agent_log(dispute_payload or {}):
                 st.session_state.agent_log.append(msg)
+            st.session_state.evidence = load_mock_evidence()  # TODO: use real evidence from stream
             st.session_state.ruling = load_mock_ruling()  # TODO: use real ruling from stream
             status.update(label="Resolution complete", state="complete")
         st.session_state.resolving = False
@@ -73,7 +78,17 @@ def main() -> None:
     if st.session_state.agent_log:
         render_courtroom_log(st.session_state.agent_log)
 
-    # --- Step 4: Ruling cards ---
+    # --- Step 4: Evidence cards ---
+    if st.session_state.evidence:
+        st.divider()
+        st.subheader("Evidence")
+        col_e1, col_e2 = st.columns(2)
+        for i, ev in enumerate(st.session_state.evidence):
+            target = col_e1 if i % 2 == 0 else col_e2
+            with target:
+                render_evidence_card(ev)
+
+    # --- Step 5: Ruling cards ---
     if st.session_state.ruling:
         st.divider()
         st.subheader("Ruling")

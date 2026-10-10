@@ -1,0 +1,36 @@
+[
+  {
+    "dispute_id": "DISP-002",
+    "tool": "no_show_check",
+    "facts": {
+      "driver_distance_from_pickup_m": 0,
+      "arrived": true,
+      "arrived_minutes_vs_scheduled": -2,
+      "total_wait_min": 8,
+      "free_wait_expired": true,
+      "no_show_threshold_reached": true,
+      "contact_attempts": 5,
+      "rider_replies": 0,
+      "missing_evidence": []
+    },
+    "flags": []
+  },
+  {
+    "dispute_id": "DISP-002",
+    "tool": "history_lookup",
+    "facts": {
+      "rider_avg_rating": 3.9,
+      "rider_total_disputes": 4,
+      "rider_upheld": 1,
+      "rider_rejected": 3,
+      "rider_fraud_flags": 1,
+      "rider_account_age_days": 210,
+      "driver_avg_rating": 4.9,
+      "driver_total_disputes": 1,
+      "driver_upheld_against": 0,
+      "driver_fraud_flags": 0,
+      "driver_account_age_days": 900
+    },
+    "flags": ["rider_fraud_flag: flagged_for_frequent_late_cancellations"]
+  }
+]

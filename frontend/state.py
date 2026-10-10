@@ -26,6 +26,11 @@ def load_mock_agent_log() -> list[dict[str, Any]]:
         return json.load(f)
 
 
+def load_mock_evidence() -> list[dict[str, Any]]:
+    with open(MOCK_DIR / "mock_evidence.json") as f:
+        return json.load(f)
+
+
 @st.cache_data(show_spinner=False)
 def load_dispute_types() -> list[dict[str, Any]]:
     """Return selectable dispute types for the filing form."""

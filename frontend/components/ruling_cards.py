@@ -23,6 +23,20 @@ OUTCOME_COLORS = {
     "escalate": "#d93025",
 }
 
+TOOL_LABELS = {
+    "no_show_check": "No-Show Check",
+    "route_deviation": "Route Deviation",
+    "fare_validate": "Fare Validation",
+    "history_lookup": "History Lookup",
+}
+
+TOOL_ICONS = {
+    "no_show_check": "📍",
+    "route_deviation": "🗺️",
+    "fare_validate": "💳",
+    "history_lookup": "📋",
+}
+
 
 def render_ruling_card(ruling: dict[str, Any], audience: str) -> None:
     """Render a ruling card for either the rider or driver perspective."""
@@ -63,3 +77,37 @@ def render_ruling_card(ruling: dict[str, Any], audience: str) -> None:
             st.warning(
                 f"⚠️ Escalated to human review: {ruling.get('escalation_reason', 'low confidence')}"
             )
+
+
+def render_evidence_card(evidence: dict[str, Any]) -> None:
+    """Render an evidence tool output card.
+
+    Expected schema (see schemas.md §2 Evidence output):
+        dispute_id, tool, facts (dict), flags (list[str])
+    """
+    tool = evidence.get("tool", "unknown")
+    facts = evidence.get("facts", {})
+    flags = evidence.get("flags", [])
+    label = TOOL_LABELS.get(tool, tool)
+    icon = TOOL_ICONS.get(tool, "🔧")
+
+    with st.container(border=True):
+        st.markdown(f"#### {icon} {label}")
+        st.caption(f"Dispute {evidence.get('dispute_id', '—')}")
+
+        if facts:
+            for key, value in facts.items():
+                display_key = key.replace("_", " ").title()
+                if isinstance(value, bool):
+                    val_str = "✅ Yes" if value else "❌ No"
+                elif isinstance(value, list) and not value:
+                    val_str = "—"
+                elif isinstance(value, list):
+                    val_str = ", ".join(str(v) for v in value)
+                else:
+                    val_str = str(value)
+                st.markdown(f"**{display_key}**: {val_str}")
+
+        if flags:
+            for flag in flags:
+                st.warning(f"⚠️ {flag}")
