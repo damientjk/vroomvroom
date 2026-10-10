@@ -74,7 +74,7 @@ def test_disp002_real_flow_stream():
     types = [line["type"] for line in lines]
 
     evidence = [l["data"]["tool"] for l in lines if l["type"] == "evidence_data"]
-    assert evidence == ["history_lookup", "safety_check", "no_show_check"]
+    assert evidence == ["history_lookup", "safety_check", "no_show_check", "fare_validate"]
     assert sorted(l["data"]["side"] for l in lines if l["type"] == "brief_data") == ["driver", "rider"]
     assert {l["agent"] for l in lines if l["type"] == "argument"} == {"rider_advocate", "driver_advocate"}
 
