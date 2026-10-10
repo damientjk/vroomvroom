@@ -5,7 +5,7 @@ from pathlib import Path
 
 from schemas import DisputeCase, EvidenceOutput
 from tools.history_lookup import history_lookup
-from tools.no_show_check import no_show_check
+from tools.no_show_check import compute_no_show_outcome, no_show_check
 from tools.route_deviation import compute_route_deviation_outcome, route_deviation
 
 DATA = Path(__file__).resolve().parents[2] / "data"
@@ -529,3 +529,136 @@ def test_judge_can_override_rider_requested_detour():
     outcome, amount, _, _ = compute_route_deviation_outcome(facts)
     assert outcome == "refund"
     assert amount == 1.07
+
+
+# ---------- no_show_check: outcome formula ----------
+
+
+def test_compute_no_show_outcome_disp002_upheld():
+    """DISP-002: all gates pass → charge upheld, $5.00, NS-1.6."""
+    facts = no_show_check(_load_disp_002()).facts
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_upheld"
+    assert amount == 5.0
+    assert clauses == ["NS-1.6"]
+    assert conduct is False
+
+
+def test_compute_no_show_outcome_tc02_free_wait():
+    """TC-02: 3-min wait < 5-min free wait → charge reversed, NS-1.3 + NS-1.7."""
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-02-NS-3min-reversed.json").read_text()
+    )
+    facts = no_show_check(case).facts
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_reversed"
+    assert amount == 5.0
+    assert clauses == ["NS-1.3", "NS-1.7"]
+    assert conduct is False
+
+
+def test_compute_no_show_outcome_tc03_not_at_pickup():
+    """TC-03: driver GPS 400m away → charge reversed, NS-1.1 + NS-1.7."""
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-03-NS-400m-reversed.json").read_text()
+    )
+    facts = no_show_check(case).facts
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_reversed"
+    assert amount == 5.0
+    assert clauses == ["NS-1.1", "NS-1.7"]
+    assert conduct is False
+
+
+def test_compute_no_show_outcome_tc04_no_contact():
+    """TC-04: 0 contact attempts → charge reversed, NS-1.5 + NS-1.7."""
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-04-NS-no-contact-reversed.json").read_text()
+    )
+    facts = no_show_check(case).facts
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_reversed"
+    assert amount == 5.0
+    assert clauses == ["NS-1.5", "NS-1.7"]
+    assert conduct is False
+
+
+def test_compute_no_show_outcome_tc09_missing_gps():
+    """TC-09: no arrived/waiting GPS points → escalate, NS-1.8 + E-1.5."""
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-09-EDGE-missing-gps.json").read_text()
+    )
+    facts = no_show_check(case).facts
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "escalate"
+    assert amount == 0.0
+    assert clauses == ["NS-1.8", "E-1.5"]
+    assert conduct is False
+
+
+# ---------- no_show_check: per-gate tests on cloned facts ----------
+
+
+def _disp002_facts() -> dict[str, object]:
+    """Return a mutable copy of DISP-002's no_show_check facts."""
+    return no_show_check(_load_disp_002()).facts
+
+
+def test_no_show_gate0_missing_evidence_escalates():
+    facts = _disp002_facts()
+    facts["missing_evidence"] = ["gps_telemetry"]
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "escalate"
+    assert amount == 0.0
+    assert clauses == ["NS-1.8", "E-1.5"]
+    assert conduct is False
+
+
+def test_no_show_gate1_not_within_radius_reverses():
+    facts = _disp002_facts()
+    facts["driver_within_arrival_radius"] = False
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_reversed"
+    assert amount == 5.0
+    assert clauses == ["NS-1.1", "NS-1.7"]
+    assert conduct is False
+
+
+def test_no_show_gate2_free_wait_not_expired_reverses():
+    facts = _disp002_facts()
+    facts["free_wait_expired"] = False
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_reversed"
+    assert amount == 5.0
+    assert clauses == ["NS-1.3", "NS-1.7"]
+    assert conduct is False
+
+
+def test_no_show_gate3_threshold_not_reached_reverses():
+    facts = _disp002_facts()
+    facts["no_show_threshold_reached"] = False
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_reversed"
+    assert amount == 5.0
+    assert clauses == ["NS-1.4", "NS-1.7"]
+    assert conduct is False
+
+
+def test_no_show_gate4_contact_attempts_one_fails():
+    facts = _disp002_facts()
+    facts["contact_attempts"] = 1
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_reversed"
+    assert amount == 5.0
+    assert clauses == ["NS-1.5", "NS-1.7"]
+    assert conduct is False
+
+
+def test_no_show_gate4_contact_attempts_two_passes():
+    facts = _disp002_facts()
+    facts["contact_attempts"] = 2
+    outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+    assert outcome == "charge_upheld"
+    assert amount == 5.0
+    assert clauses == ["NS-1.6"]
+    assert conduct is False

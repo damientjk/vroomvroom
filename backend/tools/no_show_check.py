@@ -14,6 +14,7 @@ from datetime import datetime
 
 from app.policy_constants import (
     ARRIVAL_RADIUS_M,
+    CANCELLATION_FEE_SGD,
     FREE_WAIT_TIME_MIN,
     MINIMUM_CONTACT_ATTEMPTS,
     NO_SHOW_THRESHOLD_MIN,
@@ -195,3 +196,40 @@ def no_show_check(case: DisputeCase) -> EvidenceOutput:
         facts=facts,
         flags=flags,
     )
+
+
+# ---------- Outcome formula (policy doc §7) -----------------------------
+
+
+def compute_no_show_outcome(
+    facts: dict[str, object],
+) -> tuple[str, float, list[str], bool]:
+    """Return (outcome, amount_sgd, clauses_cited, conduct_flag) for
+    no-show facts.
+
+    Implements the gate chain from docs/policy_implementation_handoff.md
+    §``compute_no_show_outcome``.  ``conduct_flag`` is always False for
+    no-show disputes.
+    """
+    # Gate 0: Missing evidence → escalate (E-1.5: no adverse inference).
+    if facts["missing_evidence"]:
+        return ("escalate", 0.00, ["NS-1.8", "E-1.5"], False)
+
+    # Gate 1: Driver arrived?
+    if not facts["driver_within_arrival_radius"]:
+        return ("charge_reversed", CANCELLATION_FEE_SGD, ["NS-1.1", "NS-1.7"], False)
+
+    # Gate 2: Free wait expired?
+    if not facts["free_wait_expired"]:
+        return ("charge_reversed", CANCELLATION_FEE_SGD, ["NS-1.3", "NS-1.7"], False)
+
+    # Gate 3: No-show threshold reached?
+    if not facts["no_show_threshold_reached"]:
+        return ("charge_reversed", CANCELLATION_FEE_SGD, ["NS-1.4", "NS-1.7"], False)
+
+    # Gate 4: Contact attempts?
+    if facts["contact_attempts"] < MINIMUM_CONTACT_ATTEMPTS:
+        return ("charge_reversed", CANCELLATION_FEE_SGD, ["NS-1.5", "NS-1.7"], False)
+
+    # All gates passed
+    return ("charge_upheld", CANCELLATION_FEE_SGD, ["NS-1.6"], False)

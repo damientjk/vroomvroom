@@ -72,7 +72,7 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 - **Refund amounts come from a policy formula in code**, not from the Judge.
 - **Every agent output follows a strict schema** (Pydantic), so the Judge can only return a valid ruling.
 - **Both advocates are treated identically**: same tools, same output format, same length cap. This prevents the Judge favouring whoever writes more.
-- **Judge runs at temperature 0** for consistency.
+- **Judge runs at the lowest temperature** for consistency. ADP's minimum is **0.1**, not 0; the consistency test checks whether that's enough. If not, call the Judge through the direct DeepSeek API at `temperature: 0`.
 - **Safety incidents are never auto-resolved.** Always escalate, and say so in the pitch.
 
 ---
@@ -84,7 +84,7 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 | Backend | Python + FastAPI | |
 | Orchestration | **LangGraph** (decided 8 Oct) | Graph = evidence → advocates in parallel → judge → escalation branch. Built-in streaming for the UI. |
 | Output schemas | Pydantic | |
-| LLM | DeepSeek via **Tencent Cloud ADP** free tokens | Each agent as an ADP app, called with its AppKey |
+| LLM | **DeepSeek-V3.2** via **Tencent Cloud ADP** (decided 10 Oct) | One Standard-mode ADP app shared by all three agents. Prompts live in our code and are sent per call (`SystemRole`); the app's prompt is left empty. AppKey read from `ADP_APP_KEY` in `.env`. |
 | Knowledge base | ADP knowledge base | Policy + precedents |
 | Frontend | Streamlit (fast) **or** Next.js/React (nicer) | **TO DECIDE** |
 | Dev tool | **CodeBuddy** (mandatory) | |
@@ -101,14 +101,22 @@ Rider Advocate   Driver Advocate   │   (run in parallel, same tools,
 |---|---|---|
 | CodeBuddy / WorkBuddy | **1,000 credits per person** (each person's own account) | Writing code (CodeBuddy); docs, policy, test cases, pitch (WorkBuddy) |
 | Miora | **1,000 credits per person** | Cover image, visuals |
-| Tencent Cloud ADP | Free DeepSeek tokens + knowledge-base capacity (check exact quota under **Platform Management → Billing Resource List**) | Running our agents |
+| Tencent Cloud ADP | **10,000 credits/month + 1 GB knowledge base per account**, valid 8 Oct – 8 Nov 2026 (see **Billing** in the ADP console) | Running our agents. A short call costs ~1 credit, so a full dispute (3 calls) is roughly 8–12 credits: one account covers ~800+ runs. |
 | Ryde sample dataset | Provided by organisers. **DISP-002 (no-show) received**; check for more cases | Evidence for test cases and the input schema |
 
 **Important:** CodeBuddy credits power the coding assistant, *not* our app's agents. Agent LLM calls use ADP's free tokens.
 
+### ADP setup (decided 10 Oct)
+
+- **Everything runs on Marcus's ADP account** (testing, metrics, consistency/fairness runs, live demo), since the knowledge base lives there. Results stay comparable.
+- Until Marcus shares the AppKey, Damien develops on his own `vroomvroom-dev` app. Switching is a one-line `.env` change.
+- **App settings (must match on every app we use):** Standard mode · Thinking + Generative model **DeepSeek-V3.2** · Temperature **0.1** (lowest allowed; set in the model dropdown) · Deep Thinking **disabled** · Prompt **empty**.
+- Each call runs two model calls (a planning "thought model" + generation) and adds ~1,650 tokens of ADP overhead.
+- AppKeys are shared by DM only, never in the group chat or the repo.
+
 ### Saving tokens
 
-- Use **saved/mocked LLM responses** during UI work so reloads don't burn tokens
+- Credits are not a constraint (see above), but still use **saved/mocked LLM responses** during UI work so reloads are fast
 - Keep advocate briefs short
 - Only run the 5x consistency test occasionally, not after every change
 - Fallback if ADP quota runs out: a direct DeepSeek API key (cheap, but out of pocket)
@@ -225,7 +233,10 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 ### Sat 10 Oct: Agents end to end
 
 **Damien**
-- [ ] `route_deviation()` + tests on the route deviation case
+- [x] `route_deviation()` + tests on the route deviation case (on `feature/route-deviation`; TC-07 data issues flagged to Marcus)
+- [x] ADP dev app set up and tested (`vroomvroom-dev`)
+- [ ] `compute_no_show_outcome()` (refund/fee formula for no-show, per handoff)
+- [ ] LLM client for ADP (reads `ADP_APP_KEY` from `.env`)
 - [ ] Rider Advocate, Driver Advocate, Judge prompts (same structure for both advocates, length cap, must cite clause IDs and evidence)
 - [ ] Wire the flow: evidence tools → both advocates in parallel → Judge
 - [ ] Refund amount computed in code from the policy formula, not by the Judge
@@ -236,7 +247,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 - [ ] Simulate streaming from `mock_agent_log.json` with delays
 
 **Marcus**
-- [ ] Create ADP apps for the agents (or confirm with Damien that we call DeepSeek via one ADP app); share AppKeys privately with Damien
+- [ ] Create **one** ADP app with the settings in Section 4 (ADP setup); DM the AppKey to Damien
 - [ ] Finish the test cases
 - [ ] Start the project description: overview + pain points sections
 
@@ -419,6 +430,7 @@ Most teams will build the same three-agent pipeline. Where we can differentiate:
 
 - [ ] Frontend: Streamlit or React?
 - [x] Orchestration: **LangGraph**
+- [x] LLM: one ADP app (DeepSeek-V3.2, temp 0.1) on Marcus's account for everything
 - [x] Assign real names to Person A, B and C → Damien, Alpha, Marcus
 - [ ] Ask in the WhatsApp group: are other AI coding tools allowed alongside CodeBuddy?
 - [ ] Project name + blurb
