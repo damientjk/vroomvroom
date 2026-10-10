@@ -366,10 +366,17 @@ def test_deviation_exactly_20pct_triggers():
         dlng = dropoff["lng"] - pickup["lng"]
         over_lat = pickup["lat"] + dlat * 1.28
         over_lng = pickup["lng"] + dlng * 1.28
+        # Extra point on the same straight leg: RD-2.7 needs >= 2 in_trip
+        # points, and a collinear point leaves the distance unchanged.
+        half_lat = pickup["lat"] + dlat * 0.64
+        half_lng = pickup["lng"] + dlng * 0.64
         d["gps_telemetry"] = [
             {"timestamp": "2026-09-20T14:00:00+08:00",
              "lat": pickup["lat"], "lng": pickup["lng"],
              "speed_kmh": 0, "status": "trip_started"},
+            {"timestamp": "2026-09-20T14:03:00+08:00",
+             "lat": half_lat, "lng": half_lng,
+             "speed_kmh": 40, "status": "in_trip"},
             {"timestamp": "2026-09-20T14:06:00+08:00",
              "lat": over_lat, "lng": over_lng,
              "speed_kmh": 40, "status": "in_trip"},
@@ -389,14 +396,17 @@ def test_deviation_below_20pct_not_triggered():
         # Use a very direct route (close to straight line) → ~0% deviation.
         pickup = d["trip_data"]["pickup_location"]
         dropoff = d["trip_data"]["dropoff_location"]
-        mid_lat = (pickup["lat"] + dropoff["lat"]) / 2
-        mid_lng = (pickup["lng"] + dropoff["lng"]) / 2
+        dlat = dropoff["lat"] - pickup["lat"]
+        dlng = dropoff["lng"] - pickup["lng"]
         d["gps_telemetry"] = [
             {"timestamp": "2026-09-20T14:00:00+08:00",
              "lat": pickup["lat"], "lng": pickup["lng"],
              "speed_kmh": 0, "status": "trip_started"},
-            {"timestamp": "2026-09-20T14:06:00+08:00",
-             "lat": mid_lat, "lng": mid_lng,
+            {"timestamp": "2026-09-20T14:04:00+08:00",
+             "lat": pickup["lat"] + dlat / 3, "lng": pickup["lng"] + dlng / 3,
+             "speed_kmh": 30, "status": "in_trip"},
+            {"timestamp": "2026-09-20T14:08:00+08:00",
+             "lat": pickup["lat"] + dlat * 2 / 3, "lng": pickup["lng"] + dlng * 2 / 3,
              "speed_kmh": 30, "status": "in_trip"},
             {"timestamp": "2026-09-20T14:12:00+08:00",
              "lat": dropoff["lat"], "lng": dropoff["lng"],
@@ -461,7 +471,7 @@ def test_missing_gps_escalates():
     outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
     assert outcome == "escalate"
     assert amount == 0.0
-    assert clauses == ["E-1.5"]
+    assert clauses == ["RD-2.7", "E-1.5"]
     assert conduct is False
 
 
@@ -662,3 +672,18 @@ def test_no_show_gate4_contact_attempts_two_passes():
     assert amount == 5.0
     assert clauses == ["NS-1.6"]
     assert conduct is False
+
+
+def test_tc11_one_in_trip_point_escalates():
+    """RD-2.7: start + 1 in_trip + end is not enough GPS to rebuild the route."""
+    case = DisputeCase.model_validate_json(
+        (TC / "TC-11-RD-missing-gps-escalate.json").read_text()
+    )
+    result = route_deviation(case)
+    assert "gps_telemetry" in result.facts["missing_evidence"]
+    assert result.facts["actual_distance_km"] is None
+    assert result.facts["trip_duration_min"] is None
+    outcome, amount, clauses, conduct = compute_route_deviation_outcome(result.facts)
+    assert outcome == "escalate"
+    assert amount == 0.0
+    assert clauses == ["RD-2.7", "E-1.5"]

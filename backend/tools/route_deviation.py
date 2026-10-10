@@ -76,7 +76,7 @@ def route_deviation(case: DisputeCase) -> EvidenceOutput:
       - fare_type (RD-2.5)
       - per_km_rate_sgd (RD-2.5)
       - actual_fare_sgd (RD-2.5)
-      - missing_evidence (escalate per E-1.5)
+      - missing_evidence (escalate per RD-2.7)
     """
     trip = case.trip_data
     pickup = trip.pickup_location
@@ -98,7 +98,11 @@ def route_deviation(case: DisputeCase) -> EvidenceOutput:
         if p.status in ("trip_started", "in_trip", "trip_completed")
     ]
 
-    if len(trip_points) < 2:
+    # RD-2.7: fewer than 2 in_trip points means the route can't be
+    # reconstructed, even though start/end points bracket the journey.
+    in_trip_count = sum(1 for p in trip_points if p.status == "in_trip")
+
+    if len(trip_points) < 2 or in_trip_count < 2:
         actual_distance_km = None
         deviation_pct = None
         missing.append("gps_telemetry")
@@ -133,7 +137,7 @@ def route_deviation(case: DisputeCase) -> EvidenceOutput:
     rider_requested_detour = len(rider_route_messages) > 0
 
     # --- RD-2.4: Traffic and Road Conditions ----------------------------
-    if len(trip_points) >= 2:
+    if actual_distance_km is not None:
         trip_duration_min = round(
             (trip_points[-1].timestamp - trip_points[0].timestamp).total_seconds()
             / 60.0,
@@ -220,9 +224,9 @@ def compute_route_deviation_outcome(
     determinations: the Judge should overwrite the tool's keyword-based
     ``rider_requested_detour`` candidate before calling this.
     """
-    # Gate 0: Missing evidence → escalate (E-1.5: no adverse inference).
+    # Gate 0: Missing evidence → escalate (RD-2.7; E-1.5: no adverse inference).
     if facts["missing_evidence"]:
-        return ("escalate", 0.00, ["E-1.5"], False)
+        return ("escalate", 0.00, ["RD-2.7", "E-1.5"], False)
 
     # Gate 1: Deviation below review threshold?
     if not facts["review_triggered"]:
