@@ -205,7 +205,7 @@ Each day lists what each person does, what they hand to someone else, and a **"d
 - [x] `no_show_check()`: driver distance from pickup, arrival vs scheduled time, total wait, contact attempts, rider replies
 - [x] `history_lookup()`: ratings, dispute history, fraud flags, account age summary
 - [x] Tests against DISP-002 (e.g. wait = 8 min, contact attempts = 5, rider replies = 0)
-- [ ] Start `route_deviation()` once Marcus has route data
+- [x] Start `route_deviation()` once Marcus has route data
 
 **Alpha**
 - [x] Dispute filing form (trip ID, dispute type, description)
