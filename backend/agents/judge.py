@@ -21,6 +21,7 @@ from app.policy_constants import SPOT_CHECK_THRESHOLD
 from schemas import AdvocateBrief, DisputeCase, EvidenceOutput, Ruling
 from tools.no_show_check import compute_no_show_outcome
 from tools.route_deviation import compute_route_deviation_outcome
+from tools.safety_check import safety_override
 
 
 class JudgeDecision(BaseModel):
@@ -48,9 +49,10 @@ override the trip evidence in determining the outcome.
 The outcome and amount are provided to you by the code. You do not \
 compute them. You explain them.
 
-If a safety incident is flagged, you must set `escalated: true` and \
-`outcome: escalate`. (This is handled by code; you only provide \
-explanations.)
+If the evidence shows a safety incident (safety_check.safety_incident is \
+true), code escalates the case to human review and no money moves (S-1.1, \
+S-1.2). Tell both parties the case is under human review instead of \
+explaining a final outcome.
 
 Produce two explanations: `explanation_rider` and `explanation_driver`, \
 each in plain language suitable for the respective party.
@@ -96,16 +98,26 @@ def _build_user_message(
     rider_brief: AdvocateBrief,
     driver_brief: AdvocateBrief,
     outcome_table_or_precomputed: str,
+    driver_first: bool = False,
 ) -> str:
-    """Build the user message for the Judge."""
+    """Build the user message for the Judge.
+
+    *driver_first* swaps which brief the Judge reads first, for the
+    advocate-order fairness test (E-1.2).
+    """
     summary = case_summary(case)
     evidence_data = [e.model_dump(mode="json") for e in evidence]
+    briefs = [
+        ("rider_brief", rider_brief.model_dump(mode="json")),
+        ("driver_brief", driver_brief.model_dump(mode="json")),
+    ]
+    if driver_first:
+        briefs.reverse()
     payload: dict[str, Any] = {
         "case_summary": summary,
         "evidence": evidence_data,
         "relevant_clauses": clauses,
-        "rider_brief": rider_brief.model_dump(mode="json"),
-        "driver_brief": driver_brief.model_dump(mode="json"),
+        **dict(briefs),
         "outcome_table": outcome_table_or_precomputed,
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -143,6 +155,8 @@ async def run_judge(
     clauses: dict[str, str],
     rider_brief: AdvocateBrief,
     driver_brief: AdvocateBrief,
+    *,
+    driver_first: bool = False,
 ) -> Ruling:
     """Run the Judge agent and return a ``Ruling``.
 
@@ -163,8 +177,24 @@ async def run_judge(
         )
     facts = type_evidence.facts
 
+    safety_evidence = next((e for e in evidence if e.tool == "safety_check"), None)
+    safety = safety_override(safety_evidence.facts) if safety_evidence else None
+
     # Build the outcome info for the prompt.
-    if dispute_type == "route_deviation":
+    if safety is not None:
+        outcome_info = (
+            "Safety incident detected by code ("
+            + "; ".join(safety_evidence.facts["categories"])
+            + "). The case is escalated to human review whatever your "
+            "findings are: outcome=escalate, amount_sgd=0.00, "
+            f"clauses={safety[2]}."
+        )
+        if dispute_type == "route_deviation":
+            outcome_info += (
+                "\nStill report rider_requested_detour and traffic_justified "
+                "for the human reviewer."
+            )
+    elif dispute_type == "route_deviation":
         outcome_info = (
             "Outcome table (computed by code for each combination of "
             "your two findings):\n"
@@ -185,6 +215,7 @@ async def run_judge(
     )
     user_message = _build_user_message(
         case, evidence, clauses, rider_brief, driver_brief, outcome_info,
+        driver_first=driver_first,
     )
 
     last_error: str | None = None
@@ -230,13 +261,26 @@ async def run_judge(
         if cid not in merged_clauses:
             merged_clauses.append(cid)
 
+    # Safety overrides the dispute-type formula (S-1.1, S-1.2).
+    # The dispute-type formula's clauses are dropped: they justify an
+    # outcome (e.g. NS-1.6 charge upheld) that no longer applies.
+    if safety is not None:
+        outcome, amount, formula_clauses, conduct = safety
+        merged_clauses = list(formula_clauses) + [
+            c for c in decision.clauses_cited if c not in formula_clauses
+        ]
+
     # Check for missing evidence escalation.
     missing = facts.get("missing_evidence", [])
     escalated = outcome == "escalate"
     escalation_reason: str | None = None
 
     if escalated:
-        if missing:
+        if safety is not None:
+            escalation_reason = "Safety incident: " + "; ".join(
+                safety_evidence.facts["categories"]
+            )
+        elif missing:
             escalation_reason = "Missing evidence: " + ", ".join(missing)
         else:
             escalation_reason = "[Judge] Escalation required"

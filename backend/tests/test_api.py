@@ -1,14 +1,23 @@
-"""Tests for the stub streaming endpoint POST /api/disputes/resolve."""
+"""Tests for the stub stream of POST /api/disputes/resolve (USE_STUB_AGENTS=true).
+
+The real agent stream is tested in test_api_agents.py.
+"""
 
 import asyncio
 import json
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _use_stub_agents(monkeypatch):
+    monkeypatch.setenv("USE_STUB_AGENTS", "true")
 
 
 def _stream_lines(resp) -> list[dict]:

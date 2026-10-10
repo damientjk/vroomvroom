@@ -1,14 +1,15 @@
 """FastAPI app for the Ryde Dispute Resolution system.
 
-This module exposes a stub streaming endpoint (POST /api/disputes/resolve)
-so the frontend can integrate before the real LangGraph agents exist. The
-mocked agent messages will be replaced by the real agent flow later.
+POST /api/disputes/resolve streams a dispute's resolution as NDJSON: the
+real LangGraph agent flow (agents/graph.py), or the stub when
+USE_STUB_AGENTS=true.  Stream format: docs/team-brief.md "API contract".
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from agents.graph import dispute_graph
 from schemas import AdvocateBrief, AgentLogMessage, Argument, DisputeCase, EvidenceOutput, Ruling
 from tools.history_lookup import history_lookup
 from tools.no_show_check import compute_no_show_outcome, no_show_check
@@ -65,6 +67,8 @@ class ResolveRequest(BaseModel):
     """Top-level request body: {"dispute_ticket": {"dispute_id": "..."}}."""
 
     dispute_ticket: DisputeTicketRequest
+    # Judge reads the driver's brief first (advocate-order fairness test).
+    driver_first: bool = False
 
 
 # ---------- Case lookup ----------
@@ -209,126 +213,196 @@ def _build_ruling(
     )
     return ruling
 
+# ---------- Stub stream (USE_STUB_AGENTS=true) ----------
+
+
+async def _stub_stream(case: DisputeCase):
+    """USE_STUB_AGENTS=true: real evidence and outcome formulas, mocked
+    advocate/Judge messages.  For UI work without spending ADP credits,
+    and as a demo fallback if ADP is down."""
+    seq = 0
+    try:
+        # --- Step 1: Real evidence ---
+        evidence_outputs: list[EvidenceOutput] = []
+    
+        history = history_lookup(case)
+        evidence_outputs.append(history)
+        seq += 1
+        yield json.dumps(AgentLogMessage(
+            seq=seq,
+            agent="system",
+            type="evidence",
+            content=_evidence_summary(history),
+            timestamp=datetime.now(timezone.utc),
+        ).model_dump(mode="json")) + "\n"
+        await asyncio.sleep(0.4)
+    
+        yield json.dumps({
+            "type": "evidence_data",
+            "data": history.model_dump(mode="json"),
+        }) + "\n"
+        await asyncio.sleep(0.4)
+    
+        dispute_type = case.dispute_ticket.dispute_type
+        if dispute_type == "no_show_charge":
+            tool_evidence = no_show_check(case)
+        elif dispute_type == "route_deviation":
+            tool_evidence = route_deviation(case)
+        else:
+            tool_evidence = None
+    
+        if tool_evidence is not None:
+            evidence_outputs.append(tool_evidence)
+            seq += 1
+            yield json.dumps(AgentLogMessage(
+                seq=seq,
+                agent="system",
+                type="evidence",
+                content=_evidence_summary(tool_evidence),
+                timestamp=datetime.now(timezone.utc),
+            ).model_dump(mode="json")) + "\n"
+            await asyncio.sleep(0.4)
+    
+            yield json.dumps({
+                "type": "evidence_data",
+                "data": tool_evidence.model_dump(mode="json"),
+            }) + "\n"
+            await asyncio.sleep(0.4)
+    
+        # --- Step 2: Mock agent messages (skip system entries) ---
+        for entry in _MOCK_AGENT_LOG:
+            if entry.get("agent") == "system":
+                continue
+            seq += 1
+            entry_out = {
+                "seq": seq,
+                "agent": entry["agent"],
+                "type": entry["type"],
+                "content": entry["content"],
+                "timestamp": _now_iso(),
+            }
+            yield json.dumps(entry_out) + "\n"
+            await asyncio.sleep(0.4)
+    
+        # --- Step 3: Mock briefs ---
+        for side in ("rider", "driver"):
+            brief = _build_advocate_brief(
+                dispute_id=case.dispute_ticket.dispute_id,
+                side=side,
+                evidence=evidence_outputs,
+            )
+            yield json.dumps({
+                "type": "brief_data",
+                "data": brief.model_dump(mode="json"),
+            }) + "\n"
+            await asyncio.sleep(0.4)
+    
+        # --- Step 4: Ruling from real outcome formula ---
+        if dispute_type == "no_show_charge":
+            facts = no_show_check(case).facts
+            outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
+            missing = facts.get("missing_evidence", [])
+        else:
+            facts = route_deviation(case).facts
+            outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
+            missing = facts.get("missing_evidence", [])
+    
+        ruling = _build_ruling(
+            dispute_id=case.dispute_ticket.dispute_id,
+            outcome=outcome,
+            amount_sgd=amount,
+            clauses_cited=clauses,
+            conduct_flag=conduct,
+            missing_evidence=missing,
+        )
+        yield json.dumps({
+            "type": "ruling_data",
+            "data": ruling.model_dump(mode="json"),
+        }) + "\n"
+        await asyncio.sleep(0.4)
+    
+    except Exception as e:
+        yield json.dumps({"type": "error", "content": str(e)}) + "\n"
+
+
+# ---------- Real agent stream (LangGraph) ----------
+
+
+def _line(obj: dict[str, Any]) -> str:
+    return json.dumps(obj) + "\n"
+
+
+def _log(seq: int, agent: str, type_: str, content: str) -> str:
+    return _line(AgentLogMessage(
+        seq=seq,
+        agent=agent,
+        type=type_,
+        content=content,
+        timestamp=datetime.now(timezone.utc),
+    ).model_dump(mode="json"))
+
+
+def _ruling_summary(ruling: Ruling) -> str:
+    text = (
+        f"Ruling: {ruling.outcome}, S${ruling.amount_sgd:.2f} "
+        f"(confidence {ruling.confidence:.2f}). "
+        f"Clauses: {', '.join(ruling.clauses_cited)}."
+    )
+    if ruling.escalated:
+        text += f" Escalated: {ruling.escalation_reason}."
+    return text
+
+
+async def _agent_stream(case: DisputeCase, driver_first: bool):
+    """Stream the LangGraph run node by node in the agreed NDJSON format."""
+    seq = 0
+    try:
+        async for update in dispute_graph.astream(
+            {"case": case, "driver_first": driver_first},
+            stream_mode="updates",
+        ):
+            for node, out in update.items():
+                out = out or {}
+                if node == "gather_evidence":
+                    for ev in out["evidence"]:
+                        seq += 1
+                        yield _log(seq, "system", "evidence", _evidence_summary(ev))
+                        yield _line({"type": "evidence_data", "data": ev.model_dump(mode="json")})
+                elif node in ("rider_advocate", "driver_advocate"):
+                    brief = out["rider_brief" if node == "rider_advocate" else "driver_brief"]
+                    seq += 1
+                    yield _log(seq, node, "argument", brief.position)
+                    for arg in brief.arguments:
+                        seq += 1
+                        yield _log(seq, node, "argument", arg.point)
+                    yield _line({"type": "brief_data", "data": brief.model_dump(mode="json")})
+                elif node == "judge":
+                    ruling = out["ruling"]
+                    seq += 1
+                    yield _log(seq, "judge", "ruling", _ruling_summary(ruling))
+                    yield _line({"type": "ruling_data", "data": ruling.model_dump(mode="json")})
+                elif node == "human_review":
+                    seq += 1
+                    yield _log(seq, "system", "ruling", "Routed to the human review queue.")
+    except Exception as e:
+        yield _line({"type": "error", "content": str(e)})
+
 
 # ---------- Streaming endpoint ----------
 
 
 @app.post("/api/disputes/resolve")
 async def resolve_dispute(req: ResolveRequest):
-    """Stream agent log messages and structured data as ND-JSON.
+    """Stream agent log messages and structured data as NDJSON.
 
-    STUB -- The mock agent messages and briefs will be replaced by the
-    real LangGraph agent flow. The evidence tools and outcome formula are
-    already real.
+    Runs the real agents (LangGraph) unless ``USE_STUB_AGENTS=true``.
     """
     case = _lookup_case(req.dispute_ticket.dispute_id)
-
-    async def stream():
-        seq = 0
-        try:
-            # --- Step 1: Real evidence ---
-            evidence_outputs: list[EvidenceOutput] = []
-
-            history = history_lookup(case)
-            evidence_outputs.append(history)
-            seq += 1
-            yield json.dumps(AgentLogMessage(
-                seq=seq,
-                agent="system",
-                type="evidence",
-                content=_evidence_summary(history),
-                timestamp=datetime.now(timezone.utc),
-            ).model_dump(mode="json")) + "\n"
-            await asyncio.sleep(0.4)
-
-            yield json.dumps({
-                "type": "evidence_data",
-                "data": history.model_dump(mode="json"),
-            }) + "\n"
-            await asyncio.sleep(0.4)
-
-            dispute_type = case.dispute_ticket.dispute_type
-            if dispute_type == "no_show_charge":
-                tool_evidence = no_show_check(case)
-            elif dispute_type == "route_deviation":
-                tool_evidence = route_deviation(case)
-            else:
-                tool_evidence = None
-
-            if tool_evidence is not None:
-                evidence_outputs.append(tool_evidence)
-                seq += 1
-                yield json.dumps(AgentLogMessage(
-                    seq=seq,
-                    agent="system",
-                    type="evidence",
-                    content=_evidence_summary(tool_evidence),
-                    timestamp=datetime.now(timezone.utc),
-                ).model_dump(mode="json")) + "\n"
-                await asyncio.sleep(0.4)
-
-                yield json.dumps({
-                    "type": "evidence_data",
-                    "data": tool_evidence.model_dump(mode="json"),
-                }) + "\n"
-                await asyncio.sleep(0.4)
-
-            # --- Step 2: Mock agent messages (skip system entries) ---
-            for entry in _MOCK_AGENT_LOG:
-                if entry.get("agent") == "system":
-                    continue
-                seq += 1
-                entry_out = {
-                    "seq": seq,
-                    "agent": entry["agent"],
-                    "type": entry["type"],
-                    "content": entry["content"],
-                    "timestamp": _now_iso(),
-                }
-                yield json.dumps(entry_out) + "\n"
-                await asyncio.sleep(0.4)
-
-            # --- Step 3: Mock briefs ---
-            for side in ("rider", "driver"):
-                brief = _build_advocate_brief(
-                    dispute_id=case.dispute_ticket.dispute_id,
-                    side=side,
-                    evidence=evidence_outputs,
-                )
-                yield json.dumps({
-                    "type": "brief_data",
-                    "data": brief.model_dump(mode="json"),
-                }) + "\n"
-                await asyncio.sleep(0.4)
-
-            # --- Step 4: Ruling from real outcome formula ---
-            if dispute_type == "no_show_charge":
-                facts = no_show_check(case).facts
-                outcome, amount, clauses, conduct = compute_no_show_outcome(facts)
-                missing = facts.get("missing_evidence", [])
-            else:
-                facts = route_deviation(case).facts
-                outcome, amount, clauses, conduct = compute_route_deviation_outcome(facts)
-                missing = facts.get("missing_evidence", [])
-
-            ruling = _build_ruling(
-                dispute_id=case.dispute_ticket.dispute_id,
-                outcome=outcome,
-                amount_sgd=amount,
-                clauses_cited=clauses,
-                conduct_flag=conduct,
-                missing_evidence=missing,
-            )
-            yield json.dumps({
-                "type": "ruling_data",
-                "data": ruling.model_dump(mode="json"),
-            }) + "\n"
-            await asyncio.sleep(0.4)
-
-        except Exception as e:
-            yield json.dumps({"type": "error", "content": str(e)}) + "\n"
-
-    return StreamingResponse(stream(), media_type="application/x-ndjson")
+    if os.environ.get("USE_STUB_AGENTS", "").lower() == "true":
+        stream = _stub_stream(case)
+    else:
+        stream = _agent_stream(case, req.driver_first)
+    return StreamingResponse(stream, media_type="application/x-ndjson")
 
 
 @app.get("/health")

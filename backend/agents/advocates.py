@@ -23,6 +23,11 @@ You are the {side} advocate in a Ryde ride-hailing dispute resolution system.
 You argue for the {side}, honestly. Use only the evidence given; never \
 invent facts.
 
+When you state a fact from the evidence, quote its value exactly as the \
+evidence gives it, and cite the field it comes from. The dispute \
+description is the filer's own claim, not evidence: if you rely on it, \
+say so ("the rider states ..."), and never cite a tool field for it.
+
 Every argument must cite at least one evidence ref in the form \
 <tool>.<fact_key> (e.g. no_show_check.total_wait_min) and at least one \
 clause ID from the policy given.
@@ -131,8 +136,11 @@ async def run_advocate(
         result = await chat(agent, system_prompt, msg)
         try:
             brief = parse_model_reply(result.text, AdvocateBrief)
-            # Override side to ensure consistency.
-            brief = brief.model_copy(update={"side": side})
+            # Override side and dispute_id to ensure consistency.
+            brief = brief.model_copy(update={
+                "side": side,
+                "dispute_id": case.dispute_ticket.dispute_id,
+            })
             _validate_brief(brief, evidence, clauses)
             return brief
         except LLMError as exc:

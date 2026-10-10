@@ -97,19 +97,26 @@ def _print_evidence(evidence_list) -> None:
 
 
 async def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python3 scripts/run_case.py <dispute_id_or_tc_prefix>")
+    args = [a for a in sys.argv[1:] if a != "--driver-first"]
+    driver_first = "--driver-first" in sys.argv[1:]
+    if len(args) != 1:
+        print(
+            "Usage: python3 scripts/run_case.py <dispute_id_or_tc_prefix> "
+            "[--driver-first]"
+        )
         sys.exit(1)
 
-    dispute_id = sys.argv[1]
+    dispute_id = args[0]
     case = load_case(dispute_id)
 
     print(f"Resolving dispute: {case.dispute_ticket.dispute_id}")
     print(f"  Type:   {case.dispute_ticket.dispute_type}")
     print(f"  Filed by: {case.dispute_ticket.filed_by}")
     print(f"  Description: {case.dispute_ticket.description[:120]}")
+    if driver_first:
+        print("  Judge reads the driver's brief first (fairness test)")
 
-    result = await resolve_case(case)
+    result = await resolve_case(case, driver_first=driver_first)
 
     _print_evidence(result["evidence"])
     _print_brief(result["rider_brief"], "Rider")

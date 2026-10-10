@@ -382,3 +382,93 @@ async def test_tc11_missing_gps_escalate():
     assert "RD-2.7" in ruling.clauses_cited
     assert "E-1.5" in ruling.clauses_cited
     assert "Missing evidence" in (ruling.escalation_reason or "")
+
+
+# ---------- 7. Safety incident overrides the formula (S-1.1) ----------
+
+
+def _briefs(case, tool_ref: str, clause: str):
+    from schemas import AdvocateBrief, Argument
+    return [
+        AdvocateBrief(
+            dispute_id=case.dispute_ticket.dispute_id,
+            side=side,
+            position=f"{side} position.",
+            arguments=[Argument(point="Point.", evidence_refs=[tool_ref], clauses=[clause])],
+        )
+        for side in ("rider", "driver")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_tc08_safety_incident_escalates():
+    """TC-08 passes every no-show gate, but the driver's threats escalate it."""
+    case = _load_tc("TC-08")
+    evidence = gather_evidence(case)
+    clauses = relevant_clauses(case.dispute_ticket.dispute_type)
+    rider_brief, driver_brief = _briefs(case, "safety_check.keyword_hits", "S-1.1")
+    seen = {}
+
+    async def _mock_chat(agent, system_prompt, user_message, **kwargs):
+        seen["user_message"] = user_message
+        return _llm_result(_make_judge_json(None, None, 0.95, ["NS-1.6", "S-1.1"]))
+
+    with patch("agents.judge.chat", side_effect=_mock_chat):
+        ruling = await run_judge(case, evidence, clauses, rider_brief, driver_brief)
+
+    assert ruling.outcome == "escalate"
+    assert ruling.amount_sgd == 0.0
+    assert ruling.escalated is True
+    assert ruling.clauses_cited[:2] == ["S-1.1", "S-1.2"]
+    assert ruling.escalation_reason.startswith("Safety incident: keyword: ")
+    assert "Safety incident detected" in seen["user_message"]
+
+
+@pytest.mark.asyncio
+async def test_no_safety_incident_keeps_formula_outcome():
+    """DISP-002 mentions a 'White Toyota': no safety incident, still upheld."""
+    case = _load_tc("DISP-002")
+    evidence = gather_evidence(case)
+    clauses = relevant_clauses(case.dispute_ticket.dispute_type)
+    rider_brief, driver_brief = _briefs(case, "no_show_check.total_wait_min", "NS-1.4")
+
+    async def _mock_chat(agent, system_prompt, user_message, **kwargs):
+        return _llm_result(_make_judge_json(None, None, 0.95, ["NS-1.6"]))
+
+    with patch("agents.judge.chat", side_effect=_mock_chat):
+        ruling = await run_judge(case, evidence, clauses, rider_brief, driver_brief)
+
+    assert ruling.outcome == "charge_upheld"
+    assert ruling.amount_sgd == 5.0
+
+
+# ---------- 8. Advocate order flag and trimmed policy text ----------
+
+
+def test_judge_driver_first_swaps_brief_order():
+    from agents.judge import _build_user_message as judge_message
+
+    case = _load_tc("DISP-002")
+    evidence = gather_evidence(case)
+    clauses = relevant_clauses(case.dispute_ticket.dispute_type)
+    rider_brief, driver_brief = _briefs(case, "no_show_check.total_wait_min", "NS-1.4")
+
+    def order(**kwargs):
+        msg = judge_message(case, evidence, clauses, rider_brief, driver_brief, "x", **kwargs)
+        keys = list(json.loads(msg))
+        return keys.index("rider_brief") < keys.index("driver_brief")
+
+    assert order() is True
+    assert order(driver_first=True) is False
+
+
+def test_relevant_clauses_trimmed_for_agents():
+    for dispute_type in ("no_show_charge", "route_deviation"):
+        text = "".join(relevant_clauses(dispute_type).values())
+        assert "Python computation" not in text
+        assert "**Source:**" not in text
+        assert "**Classification:**" not in text
+        assert "TC-" not in text and "DISP-" not in text
+    rd23 = relevant_clauses("route_deviation")["RD-2.3"]
+    assert "Judge LLM makes the final intent determination." in rd23
+    assert "**Expected outcome:**" in rd23
